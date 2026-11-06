@@ -10,6 +10,7 @@
     "record.ChunkHeightmapsMixin",
     "record.ModPayloadMixin",
     "record.ClientLevelMixin",
+    "record.ChatComponentMixin",
     "playback.MinecraftMixin",
     "playback.ReplayClockMixin",
     "playback.ReplayWeatherMixin",

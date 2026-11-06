@@ -24,6 +24,10 @@ counts, selection, food and experience, enable **Record my hotbar and HUD** in t
 before starting a recording. When you spectate the recording player, their items and applicable survival
 HUD appear below the replay timeline.
 
+Native recordings save player chat as it reaches the chat window, including server masking and client chat
+filters. During playback, imported player messages use their recorded display text and filter masks without
+requiring the original server’s chat session.
+
 ### Importing recordings
 
 Open **Replays → Import…** or drop a recording onto the replay browser. Reprise creates a separate

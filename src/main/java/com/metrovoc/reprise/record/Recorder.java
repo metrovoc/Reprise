@@ -200,11 +200,6 @@ public final class Recorder {
         }
         int selfId = this.minecraft.player == null ? Integer.MIN_VALUE : this.minecraft.player.getId();
         switch (packet) {
-            case ClientboundPlayerChatPacket chat -> {
-                // Signed chat cannot be verified in a replay; keep what the player saw.
-                Component content = chat.unsignedContent() != null ? chat.unsignedContent() : Component.literal(chat.body().content());
-                return new ClientboundSystemChatPacket(chat.chatType().decorate(content), false);
-            }
             case ClientboundSetEntityDataPacket data when data.id() == selfId -> {
                 return null;
             }
@@ -221,6 +216,7 @@ public final class Recorder {
     }
 
     private static final Set<Class<?>> CAPTURED_SEPARATELY = Set.of(
+        ClientboundPlayerChatPacket.class, ClientboundDisguisedChatPacket.class,
         ClientboundResourcePackPushPacket.class, ClientboundResourcePackPopPacket.class,
         ClientboundCustomPayloadPacket.class, ClientboundSetPlayerInventoryPacket.class, ClientboundSetHeldSlotPacket.class,
         ClientboundSetHealthPacket.class, ClientboundSetExperiencePacket.class, ClientboundSoundPacket.class, ClientboundSoundEntityPacket.class

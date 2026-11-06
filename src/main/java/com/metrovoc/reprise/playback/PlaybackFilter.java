@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.level.GameType;
@@ -33,6 +34,16 @@ final class PlaybackFilter {
         switch (packet) {
             case net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom -> {
                 return com.metrovoc.reprise.record.ReplayPayloads.records(custom.payload()) ? packet : null;
+            }
+            case ClientboundPlayerChatPacket chat -> {
+                // Imported recordings can start mid-chain. Display the archived content without
+                // passing stale indexes or signatures to the live connection validator.
+                var mc = Minecraft.getInstance();
+                var mask = chat.filterMask();
+                if (mask.isFullyFiltered() || mc.options.onlyShowSecureChat().get() || mc.isBlocked(chat.sender())) return null;
+                Component content = mask.isEmpty() && chat.unsignedContent() != null
+                    ? chat.unsignedContent() : mask.applyWithFormatting(chat.body().content());
+                return new ClientboundDisguisedChatPacket(content, chat.chatType());
             }
             case ClientboundLoginPacket login -> {
                 hotbarOwner = null;
