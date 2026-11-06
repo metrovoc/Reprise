@@ -43,6 +43,7 @@ public final class ReplayProject {
     public int exportEnd = -1;
     public ExportSettings export = new ExportSettings();
 
+    public com.metrovoc.reprise.gui.Timeline.View timelineView;
     private transient Path path;
     private transient ProjectHistory history = new ProjectHistory();
     private transient JsonObject beforeEdit;
@@ -78,12 +79,15 @@ public final class ReplayProject {
     }
 
     private JsonObject state() {
-        return ReplayMeta.GSON.toJsonTree(this).getAsJsonObject();
+        JsonObject state = ReplayMeta.GSON.toJsonTree(this).getAsJsonObject();
+        state.remove("timelineView");
+        return state;
     }
 
     public void save() {
         JsonObject state = state();
         finishEdit(state);
+        if (this.timelineView != null) state.add("timelineView", ReplayMeta.GSON.toJsonTree(this.timelineView));
         state.add("history", ReplayMeta.GSON.toJsonTree(this.history));
         try {
             Path temp = Files.createTempFile(this.path.getParent(), ".project-", ".tmp");
@@ -147,6 +151,12 @@ public final class ReplayProject {
         this.export = state.export;
         save();
         return true;
+    }
+
+    public void putCameraKey(Keyframe key) {
+        this.keyframes.removeIf(existing -> existing == key || Math.abs(existing.tick - key.tick) < 0.5);
+        this.keyframes.add(key);
+        sort();
     }
 
     public void sort() {

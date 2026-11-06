@@ -44,7 +44,10 @@ world, so a seek replays at most one segment.
 
 ## Editing
 
-The editor (`Tab`) puts a timeline under the live world. The movement keys still fly the camera.
+The editor (`Tab`) puts a timeline under the live world. Scroll over the timeline to zoom around the pointer,
+middle-drag or scroll horizontally to pan, and double-middle-click to show the full replay. The editor remembers
+the visible range when reopened. Dropping a camera key onto an occupied tick replaces the key at that tick.
+Undo restores both keys. The movement keys still fly the camera.
 
 Set the in-point with **[** and the out-point with **]**, then choose **Save replay clip** to create a
 standalone recording. The clip opens at the in-point and keeps markers within the selected range. Its

@@ -102,7 +102,7 @@ import org.slf4j.Logger;
  * take N                     shift-click slot number N of the open container (see inspect)
  * hover X Y [TICKS]          move the mouse; with TICKS, glide there in that many ticks
  * point TICKS LABEL          glide the mouse onto the open screen's first widget whose label starts with LABEL
- * drag X1 Y1 X2 Y2 [TICKS]   press the left button at one point, glide to the other in TICKS ticks (4), release
+ * drag X1 Y1 X2 Y2 [TICKS] [middle]   drag with the left or middle button over TICKS ticks (4)
  * scroll AMOUNT              scroll the open screen where the mouse is
  * key NAME                   press and release a key by GLFW name (escape, enter, e, f1), as the keyboard would
  * type TEXT                  type into the open screen
@@ -158,8 +158,8 @@ public final class Driver {
     private static double glideX;
     private static double glideY;
     private static int gliding;
-    /** Whether the left button is held while the mouse glides, for a drag. */
-    private static boolean dragging;
+    /** The button held during a scripted drag, or null for an ordinary glide. */
+    private static MouseButtonInfo dragButton;
     /** The clip being recorded, or null, and its frames so far. */
     private static Path clip;
     private static int every;
@@ -209,15 +209,15 @@ public final class Driver {
         }
         if (gliding > 0) {
             double x = mouseX + (glideX - mouseX) / gliding, y = mouseY + (glideY - mouseY) / gliding;
-            if (dragging) {
-                mc.screen.mouseDragged(new MouseButtonEvent(x, y, LEFT), x - mouseX, y - mouseY);
+            if (dragButton != null) {
+                mc.screen.mouseDragged(new MouseButtonEvent(x, y, dragButton), x - mouseX, y - mouseY);
             }
             moveMouse(mc, x, y);
-            if (--gliding == 0 && dragging) {
+            if (--gliding == 0 && dragButton != null) {
                 if (mc.screen != null) {
-                    mc.screen.mouseReleased(new MouseButtonEvent(x, y, LEFT));
+                    mc.screen.mouseReleased(new MouseButtonEvent(x, y, dragButton));
                 }
-                dragging = false;
+                dragButton = null;
             }
         }
         if (clip != null && mc.player != null && mc.player.tickCount % every == 0) {
@@ -380,9 +380,9 @@ public final class Driver {
             }
             case "drag" -> {
                 point(mc, args);
-                mc.screen.mouseClicked(new MouseButtonEvent(mouseX, mouseY, LEFT), false);
+                dragButton = args.length > 5 && args[5].equals("middle") ? new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, 0) : LEFT;
+                mc.screen.mouseClicked(new MouseButtonEvent(mouseX, mouseY, dragButton), false);
                 double[] to = spot(mc, args[2], args[3]);
-                dragging = true;
                 glide(to[0], to[1], args.length > 4 ? Integer.parseInt(args[4]) : 4);
             }
             case "scroll" -> mc.screen.mouseScrolled(mouseX, mouseY, 0, Double.parseDouble(arg));

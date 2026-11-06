@@ -113,6 +113,7 @@
   "reprise.editor.save_clip": "Save replay clip",
   "reprise.editor.save_clip.tooltip": "Save the selected timeline range as a new recording.",
   "reprise.editor.saving_clip": "Saving replay clip…",
+  "reprise.editor.timeline_position": "%s · tick %s",
   "reprise.editor.title": "Replay Editor",
   "reprise.editor.play": "Play/Pause",
   "reprise.editor.speed": "Playback speed; click for 1×",

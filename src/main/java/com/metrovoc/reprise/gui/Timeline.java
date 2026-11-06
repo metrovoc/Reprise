@@ -18,6 +18,48 @@ public final class Timeline {
     public static final int SPEED = 0xFF4DD0E1;
 
     public int x, y, width, height;
+    private double firstTick;
+    private double visibleTicks = Double.POSITIVE_INFINITY;
+
+    public record View(double start, double ticks) {}
+
+    public View view(int duration) {
+        return span(duration) >= duration ? null : new View(firstTick, visibleTicks);
+    }
+
+    public void restore(View view, int duration) {
+        if (view == null || duration <= 0) {
+            fit();
+        } else {
+            visibleTicks = Math.clamp(view.ticks(), Math.min(10, duration), duration);
+            firstTick = Math.clamp(view.start(), 0, duration - visibleTicks);
+        }
+    }
+
+    private double span(int duration) {
+        return Math.min(visibleTicks, Math.max(1, duration));
+    }
+
+    public void zoom(double mouseX, double steps, int duration) {
+        if (duration <= 0) return;
+        double anchor = tickAt(mouseX, duration);
+        double fraction = Math.clamp((mouseX - x) / Math.max(1, width), 0, 1);
+        visibleTicks = Math.clamp(span(duration) * Math.pow(1.5, -steps), Math.min(10, duration), duration);
+        firstTick = Math.clamp(anchor - visibleTicks * fraction, 0, duration - visibleTicks);
+    }
+
+    public void pan(double pixels, int duration) {
+        firstTick = Math.clamp(firstTick - pixels * span(duration) / Math.max(1, width), 0, Math.max(0, duration - span(duration)));
+    }
+
+    public void fit() {
+        firstTick = 0;
+        visibleTicks = Double.POSITIVE_INFINITY;
+    }
+
+    private boolean visible(double tick, int duration) {
+        return tick >= firstTick && tick <= firstTick + span(duration);
+    }
 
     public void setBounds(int x, int y, int width, int height) {
         this.x = x;
@@ -28,11 +70,11 @@ public final class Timeline {
 
     public double tickAt(double mouseX, int duration) {
         double f = (mouseX - this.x) / Math.max(1, this.width);
-        return Math.max(0, Math.min(1, f)) * duration;
+        return Math.min(duration, firstTick + Math.clamp(f, 0, 1) * span(duration));
     }
 
     public int xOf(double tick, int duration) {
-        return this.x + (int) Math.round(tick / Math.max(1, duration) * this.width);
+        return this.x + (int) Math.round(Math.clamp((tick - firstTick) / span(duration), -1, 2) * this.width);
     }
 
     public boolean contains(double mx, double my) {
@@ -44,54 +86,60 @@ public final class Timeline {
         ReplayProject project = session.project();
         int trackTop = this.y + (detailed ? 10 : 0);
         int trackBottom = this.y + this.height;
+        g.enableScissor(this.x - 3, this.y, this.x + this.width + 4, trackBottom + 2);
         g.fill(this.x, trackTop, this.x + this.width, trackBottom, TRACK);
 
         if (project.exportStart >= 0 || project.exportEnd >= 0) {
-            int rs = xOf(project.start(), duration), re = xOf(project.end(duration), duration);
-            g.fill(rs, trackTop, re, trackBottom, RANGE);
+            int rs = Math.max(this.x, xOf(project.start(), duration)), re = Math.min(this.x + this.width, xOf(project.end(duration), duration));
+            if (rs < re) g.fill(rs, trackTop, re, trackBottom, RANGE);
         }
         // Progress
         int px = xOf(tick, duration);
-        g.fill(this.x, trackBottom - 2, px, trackBottom, 0xFF5B8CFF);
+        g.fill(this.x, trackBottom - 2, Math.clamp(px, this.x, this.x + this.width), trackBottom, 0xFF5B8CFF);
 
         if (detailed) {
             // Ruler: a label every "nice" interval.
-            int[] steps = {20, 100, 200, 600, 1200, 3600, 6000, 12000, 36000, 72000};
+            int[] steps = {1, 2, 5, 10, 20, 100, 200, 600, 1200, 3600, 6000, 12000, 36000, 72000};
             int step = steps[steps.length - 1];
             for (int s : steps) {
-                if ((double) s / duration * this.width >= 60) {
+                if ((double) s / span(duration) * this.width >= 60) {
                     step = s;
                     break;
                 }
             }
-            for (int t = 0; t <= duration; t += step) {
+            for (long t = (long) Math.ceil(firstTick / step) * step; t <= firstTick + span(duration); t += step) {
                 int tx = xOf(t, duration);
                 g.verticalLine(tx, trackTop - 3, trackTop, 0xFF808080);
-                g.text(font, Timecode.format(t), tx + 2, this.y, 0xFF9A9AA6, false);
+                g.text(font, step < 20 ? t + "t" : Timecode.format(t), tx + 2, this.y, 0xFF9A9AA6, false);
             }
         }
         for (ReplayMeta.Marker marker : session.meta().markers) {
+            if (!visible(marker.tick, duration)) continue;
             int mx = xOf(marker.tick, duration);
             g.fill(mx, trackTop, mx + 1, trackBottom, 0xFF000000 | marker.color);
         }
         int mid = (trackTop + trackBottom) / 2;
         for (Keyframe k : project.keyframes) {
+            if (!visible(k.tick, duration)) continue;
             int kx = xOf(k.tick, duration);
             int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
             diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
         }
         for (var key : project.environment.keys) {
+            if (!visible(key.tick(), duration)) continue;
             int tx = xOf(key.tick(), duration);
             int color = project.environment.clock == com.metrovoc.reprise.editor.EnvironmentSettings.Clock.KEYFRAMED ? 0xFFFFAA66 : 0xFF90745F;
             g.fill(tx - 2, trackTop, tx + 3, trackTop + 2, color);
         }
         for (com.metrovoc.reprise.editor.SpeedKey key : project.speedKeys) {
+            if (!visible(key.tick, duration)) continue;
             int sx = xOf(key.tick, duration);
             g.fill(sx - 2, trackBottom - 4, sx + 3, trackBottom - 3, SPEED);
             g.fill(sx - 1, trackBottom - 3, sx + 2, trackBottom - 2, SPEED);
             g.fill(sx, trackBottom - 2, sx + 1, trackBottom - 1, SPEED);
         }
-        g.fill(px, trackTop - 1, px + 1, trackBottom + 1, PLAYHEAD);
+        if (visible(tick, duration)) g.fill(px, trackTop - 1, px + 1, trackBottom + 1, PLAYHEAD);
+        g.disableScissor();
     }
 
     private static void diamond(GuiGraphicsExtractor g, int cx, int cy, int color, boolean square) {
@@ -111,6 +159,7 @@ public final class Timeline {
             return null;
         }
         for (var key : session.project().speedKeys) {
+            if (!visible(key.tick, duration)) continue;
             if (Math.abs(xOf(key.tick, duration) - mx) <= 3) {
                 return key;
             }
@@ -121,6 +170,7 @@ public final class Timeline {
     public ReplayMeta.Marker markerAt(ReplaySession session, double mx) {
         int duration = Math.max(1, session.duration());
         for (ReplayMeta.Marker marker : session.meta().markers) {
+            if (!visible(marker.tick, duration)) continue;
             if (Math.abs(xOf(marker.tick, duration) - mx) <= 2) {
                 return marker;
             }
@@ -133,6 +183,7 @@ public final class Timeline {
         Keyframe best = null;
         double bestDist = 5;
         for (Keyframe k : session.project().keyframes) {
+            if (!visible(k.tick, duration)) continue;
             double d = Math.abs(xOf(k.tick, duration) - mx);
             if (d <= bestDist) {
                 best = k;

@@ -253,7 +253,6 @@ public final class PlaybackControls {
         ReplayProject project = session.project();
         project.checkpoint();
         double tick = session.visualTick(0);
-        project.keyframes.removeIf(k -> Math.abs(k.tick - tick) < 0.5);
         Keyframe k = new Keyframe();
         k.tick = Math.round(tick);
         k.target = target;
@@ -272,8 +271,7 @@ public final class PlaybackControls {
             k.yaw = fallback.yaw();
             k.pitch = fallback.pitch();
         }
-        project.keyframes.add(k);
-        project.sort();
+        project.putCameraKey(k);
         project.save();
         mc.gui.setOverlayMessage(Component.translatable("reprise.editor.keyframe.added", Timecode.precise(k.tick)), false);
         return k;

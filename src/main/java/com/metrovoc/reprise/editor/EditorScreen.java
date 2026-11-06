@@ -34,6 +34,8 @@ public final class EditorScreen extends Screen {
     private Keyframe selected;
     private boolean scrubbing;
     private Keyframe dragging;
+    private double dragStart;
+    private boolean panning;
     private double scrubTick = -1;
     private long lastScrubSeek;
     private Button playButton;
@@ -62,6 +64,7 @@ public final class EditorScreen extends Screen {
     public EditorScreen(ReplaySession session) {
         super(Component.translatable("reprise.editor.title"));
         this.session = session;
+        this.timeline.restore(session.project().timelineView, session.duration());
     }
 
     public boolean flying() {
@@ -279,7 +282,7 @@ public final class EditorScreen extends Screen {
         }
         if (this.timeline.contains(mouseX, mouseY)) {
             double hover = this.timeline.tickAt(mouseX, this.session.duration());
-            String tip = Timecode.precise(hover);
+            String tip = Component.translatable("reprise.editor.timeline_position", Timecode.precise(hover), Math.round(hover)).getString();
             SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
             var marker = this.timeline.markerAt(this.session, mouseX);
             if (speed != null) {
@@ -292,12 +295,31 @@ public final class EditorScreen extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        if (!this.timeline.contains(x, y)) return super.mouseScrolled(x, y, horizontal, vertical);
+        if (this.dragging == null && !this.scrubbing) {
+            this.timeline.zoom(x, vertical, this.session.duration());
+            this.timeline.pan(horizontal * 32, this.session.duration());
+            project().timelineView = this.timeline.view(this.session.duration());
+        }
+        return true;
+    }
+
+    @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (super.mouseClicked(event, doubleClick)) {
             return true;
         }
         if (!this.timeline.contains(event.x(), event.y())) {
             return false;
+        }
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            if (doubleClick) {
+                this.timeline.fit();
+                project().timelineView = null;
+            }
+            this.panning = !doubleClick;
+            return true;
         }
         SpeedKey speedHit = this.timeline.speedKeyAt(this.session, event.x(), event.y());
         if (speedHit != null && event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
@@ -329,6 +351,7 @@ public final class EditorScreen extends Screen {
                 CameraController.setRoll(hit.roll);
             } else {
                 project().checkpoint();
+                this.dragStart = hit.tick;
                 this.dragging = hit;
             }
             return true;
@@ -341,6 +364,11 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (this.panning) {
+            this.timeline.pan(dx, this.session.duration());
+            project().timelineView = this.timeline.view(this.session.duration());
+            return true;
+        }
         if (this.dragging != null) {
             this.dragging.tick = Math.round(this.timeline.tickAt(event.x(), this.session.duration()));
             project().sort();
@@ -360,9 +388,12 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (this.panning) {
+            this.panning = false;
+            return true;
+        }
         if (this.dragging != null) {
-            this.dragging = null;
-            project().save();
+            finishDrag();
             return true;
         }
         if (this.scrubbing) {
@@ -372,6 +403,19 @@ public final class EditorScreen extends Screen {
             return true;
         }
         return super.mouseReleased(event);
+    }
+
+    private void finishDrag() {
+        if (this.dragging.tick != this.dragStart) project().putCameraKey(this.dragging);
+        this.dragging = null;
+        project().save();
+    }
+
+    @Override
+    public void removed() {
+        if (this.dragging != null) finishDrag();
+        this.panning = false;
+        super.removed();
     }
 
     private void restoreEdit(boolean redo) {
