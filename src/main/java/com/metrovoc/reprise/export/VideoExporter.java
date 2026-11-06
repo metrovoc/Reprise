@@ -153,6 +153,9 @@ public final class VideoExporter {
         }
         Path dir = ReprisePaths.exports();
         boolean sequence = settings.format == ExportSettings.Format.PNG_SEQUENCE;
+        long firstSample = SoundtrackMix.sampleAt(session.project().previewClock(session.duration()), this.start);
+        SoundtrackMix soundtrack = settings.audio && !session.project().audioCues.isEmpty()
+            ? session.soundtrack.exportMix(session, firstSample, AudioCapture.sampleCount(frameRate, totalFrames)) : null;
         this.files = new ExportFiles(dir, base, sequence ? "" : "." + settings.format.extension);
         FrameSink opened = null;
         try {
@@ -167,7 +170,7 @@ public final class VideoExporter {
                 opened = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.files.media, this.files.work.resolve("encode.log"));
             }
             this.audio = settings.audio ? new AudioCapture(this.files.work.resolve(sequence ? "audio.wav" : "audio.f32"),
-                frameRate, this.totalFrames, sequence) : null;
+                frameRate, this.totalFrames, sequence, soundtrack, firstSample) : null;
             this.sink = opened;
         } catch (Exception e) {
             if (opened != null) opened.abort();

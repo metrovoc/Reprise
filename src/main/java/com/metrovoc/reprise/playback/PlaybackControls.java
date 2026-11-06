@@ -38,6 +38,9 @@ public final class PlaybackControls {
             var exporter = com.metrovoc.reprise.export.VideoExporter.running();
             if (exporter != null) {
                 exporter.afterRender();
+            } else if (ReplaySession.active() != null) {
+                var session = ReplaySession.active();
+                session.soundtrack.preview(session, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true));
             }
         });
         bus.addListener(RenderGuiLayerEvent.Pre.class, e -> {

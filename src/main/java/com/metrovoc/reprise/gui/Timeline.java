@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.gui;
 
+import com.metrovoc.reprise.editor.AudioCue;
 import com.metrovoc.reprise.editor.Keyframe;
 import com.metrovoc.reprise.editor.ReplayProject;
 import com.metrovoc.reprise.format.ReplayMeta;
@@ -9,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /** Draws the replay's timeline: ruler, export range, markers, keyframes and playhead. */
 public final class Timeline {
+    public static final int AUDIO_HEIGHT = 14;
     public static final int BACKGROUND = 0xC0101014;
     public static final int TRACK = 0xFF2A2A33;
     public static final int RANGE = 0x5560A0FF;
@@ -89,13 +91,18 @@ public final class Timeline {
         int duration = Math.max(1, session.duration());
         ReplayProject project = session.project();
         int trackTop = this.y + (detailed ? 10 : 0);
-        int trackBottom = this.y + this.height;
-        g.enableScissor(this.x - 3, this.y, this.x + this.width + 4, trackBottom + 2);
+        int bottom = this.y + this.height;
+        int trackBottom = detailed && !project.audioCues.isEmpty() ? bottom - AUDIO_HEIGHT : bottom;
+        g.enableScissor(this.x - 3, this.y, this.x + this.width + 4, bottom + 2);
         g.fill(this.x, trackTop, this.x + this.width, trackBottom, TRACK);
 
         if (project.exportStart >= 0 || project.exportEnd >= 0) {
             int rs = Math.max(this.x, xOf(project.start(), duration)), re = Math.min(this.x + this.width, xOf(project.end(duration), duration));
             if (rs < re) g.fill(rs, trackTop, re, trackBottom, RANGE);
+        }
+        if (trackBottom < bottom) {
+            g.fill(x, trackBottom + 1, x + width, bottom, TRACK);
+            drawAudio(g, session, duration, trackBottom + 1, bottom);
         }
         int addedTicks = 0;
         for (var freeze : project.freezes) {
@@ -162,8 +169,49 @@ public final class Timeline {
             g.fill(sx - 1, trackBottom - 3, sx + 2, trackBottom - 2, SPEED);
             g.fill(sx, trackBottom - 2, sx + 1, trackBottom - 1, SPEED);
         }
-        if (visible(tick, duration)) g.fill(px, trackTop - 1, px + 1, trackBottom + 1, PLAYHEAD);
+        if (visible(tick, duration)) g.fill(px, trackTop - 1, px + 1, bottom + 1, PLAYHEAD);
         g.disableScissor();
+    }
+
+    private void drawAudio(GuiGraphicsExtractor g, ReplaySession session, int duration, int top, int bottom) {
+        var project = session.project();
+        var clock = project.previewClock(duration);
+        for (var cue : project.audioCues) {
+            double start = clock.videoTimeAt(cue.tick());
+            double end = clock.tickAtVideoTime(start + cue.playableFrames(cue.frames()) / 2400.0);
+            int left = Math.max(x, xOf(cue.tick(), duration)), right = Math.min(x + width, xOf(end, duration));
+            if (right < left) continue;
+            session.soundtrack.load(cue.file(), project.export.ffmpeg, false);
+            var source = session.soundtrack.ready(cue.file());
+            g.fill(left, top, right + 1, bottom, 0x503F9982);
+            if (source != null) {
+                double seconds = Math.max(cue.offset(), cue.offset() + (clock.videoTimeAt(tickAt(left, duration)) - start) / 20);
+                for (int px = left; px <= right; px++) {
+                    double next = Math.min(cue.offset() + cue.playableFrames(source.frames()) / 48000.0,
+                        cue.offset() + (clock.videoTimeAt(tickAt(px + 1, duration)) - start) / 20);
+                    int h = (int)Math.ceil(Math.min(1, source.peak(seconds, next) * cue.gain()) * (bottom - top - 2) / 2);
+                    seconds = next;
+                    int middle = (top + bottom) / 2;
+                    g.fill(px, middle - h, px + 1, middle + h + 1, 0xAA83CEB9);
+                }
+            }
+        }
+    }
+
+    public boolean inAudioLane(ReplaySession session, double my) {
+        return !session.project().audioCues.isEmpty() && my > y + height - AUDIO_HEIGHT && my <= y + height;
+    }
+
+    public AudioCue audioCueAt(ReplaySession session, double mx, double my) {
+        if (!inAudioLane(session, my)) return null;
+        int duration = session.duration();
+        var project = session.project();
+        var clock = project.previewClock(duration);
+        for (var cue : project.audioCues.reversed()) {
+            double end = clock.tickAtVideoTime(clock.videoTimeAt(cue.tick()) + cue.playableFrames(cue.frames()) / 2400.0);
+            if (mx >= xOf(cue.tick(), duration) && mx <= xOf(end, duration)) return cue;
+        }
+        return null;
     }
 
     private static void diamond(GuiGraphicsExtractor g, int cx, int cy, int color, boolean square) {
@@ -179,7 +227,8 @@ public final class Timeline {
 
     public com.metrovoc.reprise.editor.SpeedKey speedKeyAt(ReplaySession session, double mx, double my) {
         int duration = Math.max(1, session.duration());
-        if (my < this.y + this.height - 6) {
+        int bottom = y + height - (session.project().audioCues.isEmpty() ? 0 : AUDIO_HEIGHT);
+        if (my < bottom - 6 || my > bottom) {
             return null;
         }
         for (var key : session.project().speedKeys) {
@@ -216,6 +265,7 @@ public final class Timeline {
 
     public Keyframe keyframeAt(ReplaySession session, double mx, double my) {
         int duration = Math.max(1, session.duration());
+        if (inAudioLane(session, my)) return null;
         Keyframe best = null;
         double bestDist = 5;
         for (Keyframe k : session.project().keyframes) {

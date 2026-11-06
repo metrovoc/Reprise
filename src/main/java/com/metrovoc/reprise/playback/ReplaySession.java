@@ -137,6 +137,7 @@ public final class ReplaySession {
     private ReplayProject queuedProject;
 
     private ReplaySession(ReplayFile file, Screen exitScreen) {
+    public final com.metrovoc.reprise.export.Soundtrack soundtrack = new com.metrovoc.reprise.export.Soundtrack();
         this.file = file;
         this.meta = file.meta();
         this.exitScreen = exitScreen;
@@ -235,6 +236,7 @@ public final class ReplaySession {
         terrainClock.discard();
         skyLightCache.clear();
         CameraPath.setPreview(false);
+        soundtrack.close();
         this.project.save();
         clearEmbeddedPacks();
         try {
@@ -308,6 +310,7 @@ public final class ReplaySession {
         this.playing = playing && tick() < duration();
         if (this.playing) pausedCursor = Double.NaN;
     }
+        if (!playing) soundtrack.stopPreview();
 
     public float speed() {
         return this.speed;
@@ -427,6 +430,7 @@ public final class ReplaySession {
         pausedCursor = Double.NaN;
         target = Math.max(0, Math.min(duration(), target));
         currentFreezes = project().freezes;
+        soundtrack.stopPreview();
         int shotTarget = target;
         target = (int) Math.ceil(project().worldTick(target));
         shotOffset = shotTarget - target;

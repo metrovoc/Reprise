@@ -24,6 +24,9 @@ public final class AudioCapture {
 
     private static boolean loopback;
 
+    private final SoundtrackMix.Reader soundtrack;
+    private final long firstSample;
+    private final float[] music;
     private final Path file;
     private final OutputStream out;
     private final int numerator;
@@ -36,16 +39,22 @@ public final class AudioCapture {
     private long remainder;
     private long written;
 
-    AudioCapture(Path file, FrameRate rate, int frames, boolean wave) throws IOException {
+    static long sampleCount(FrameRate rate, int frames) {
+        long perFrame = (long) RATE * rate.denominator();
+        return frames * (perFrame / rate.numerator()) + frames * (perFrame % rate.numerator()) / rate.numerator();
+    }
+
+    AudioCapture(Path file, FrameRate rate, int frames, boolean wave, SoundtrackMix mix, long firstSample) throws IOException {
         this.file = file;
+        this.soundtrack = mix == null ? null : new SoundtrackMix.Reader(mix);
+        this.firstSample = firstSample;
         numerator = rate.numerator();
         samplesPerFrameNumerator = (long) RATE * rate.denominator();
         this.wave = wave;
-        // Divide first so a long shot at a fractional rate cannot overflow the intermediate product.
-        this.expectedSamples = frames * (samplesPerFrameNumerator / numerator)
-            + frames * (samplesPerFrameNumerator % numerator) / numerator;
+        this.expectedSamples = sampleCount(rate, frames);
         this.out = new BufferedOutputStream(Files.newOutputStream(file), 1 << 16);
         int max = (int) (samplesPerFrameNumerator / numerator) + 2;
+        music = mix == null ? null : new float[max * CHANNELS];
         this.samples = MemoryUtil.memAllocFloat(max * CHANNELS);
         this.bytes = ByteBuffer.allocate(max * CHANNELS * 4).order(ByteOrder.LITTLE_ENDIAN);
     }
@@ -82,9 +91,13 @@ public final class AudioCapture {
         this.remainder %= numerator;
         this.samples.clear();
         SOFTLoopback.alcRenderSamplesSOFT(this.device, this.samples, count);
+        if (soundtrack != null) {
+            java.util.Arrays.fill(music, 0, count * CHANNELS, 0f);
+            soundtrack.add(music, firstSample + written, count);
+        }
         this.bytes.clear();
         for (int i = 0; i < count * CHANNELS; i++) {
-            float value = this.samples.get(i);
+            float value = this.samples.get(i) + (music == null ? 0 : music[i]);
             if (this.wave) {
                 this.bytes.putShort(PcmWave.sample(value));
             } else {

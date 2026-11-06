@@ -71,6 +71,7 @@ public final class ReplayProject {
     }
 
     public List<Keyframe> keyframes = new ArrayList<>();
+    public List<AudioCue> audioCues = new ArrayList<>();
     public boolean shakeEnabled = true;
     public List<CameraShake.Key> shakeKeys = new ArrayList<>();
     private transient CameraShake shake;
@@ -194,6 +195,7 @@ public final class ReplayProject {
         if (!this.history.apply(current, forward)) return false;
         ReplayProject state = ReplayMeta.GSON.fromJson(current, ReplayProject.class);
         this.environment = state.environment;
+        this.audioCues = state.audioCues;
         this.shakeKeys = state.shakeKeys;
         this.shakeEnabled = state.shakeEnabled;
         this.hideNames = state.hideNames;
@@ -218,6 +220,7 @@ public final class ReplayProject {
         freezes = updated;
         for (var key : keyframes) if (key.tick > shotTick) key.tick += length;
         for (var key : speedKeys) if (key.tick > shotTick) key.tick += length;
+        audioCues.replaceAll(c -> c.tick() > shotTick ? c.at(c.tick() + length) : c);
         shakeKeys.replaceAll(k -> k.tick() > shotTick ? k.at(k.tick() + length) : k);
         if (exportStart > shotTick) exportStart += length;
         if (exportEnd >= shotTick) exportEnd += length;
@@ -287,7 +290,7 @@ public final class ReplayProject {
         return shake;
     }
 
-    private FrameSchedule previewClock(int duration) {
+    public FrameSchedule previewClock(int duration) {
         if (previewClock == null || previewDuration != duration) {
             previewClock = frameSchedule(0, duration, 20);
             previewDuration = duration;
@@ -327,6 +330,7 @@ public final class ReplayProject {
         neighbor.consider(end(duration));
         for (var key : keyframes) neighbor.consider(key.tick);
         for (var key : speedKeys) neighbor.consider(key.tick);
+        for (var cue : audioCues) neighbor.consider(cue.tick());
         for (var key : shakeKeys) neighbor.consider(key.tick());
         for (var key : environment.keys) neighbor.consider(shotTick(key.tick()));
         for (var marker : markers) neighbor.consider(shotTick(marker.tick));

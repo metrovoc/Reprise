@@ -245,7 +245,7 @@ public final class ExportScreen extends Screen {
         error = null;
         try {
             this.session.project().save();
-            VideoExporter.start(this.session, this.settings, this.parent);
+            SoundtrackPreparationScreen.start(this.session, this.settings, this.parent);
         } catch (Exception e) {
             Reprise.LOGGER.error("Could not start the export", e);
             this.error = String.valueOf(e.getMessage());

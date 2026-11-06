@@ -85,7 +85,12 @@ public final class FrameSchedule {
     public double tickAt(long frame) {
         if (frame < 0 || frame >= count) throw new IndexOutOfBoundsException(frame);
         if (frame == 0) return start;
-        double time = frame * 20.0 / fps;
+        return tickAtVideoTime(frame * 20.0 / fps);
+    }
+
+    public double tickAtVideoTime(double time) {
+        if (time <= 0 || spans.isEmpty()) return start;
+        if (time >= spans.getLast().videoEnd) return end;
         int low = 0, high = spans.size() - 1;
         while (low < high) {
             int mid = (low + high) >>> 1;

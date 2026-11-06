@@ -113,6 +113,8 @@ public final class EditorScreen extends Screen {
             .bounds(68, 78, 60, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("reprise.shake.title"), b ->
             minecraft.setScreen(new CameraShakeScreen(this, session))).bounds(132, 78, 110, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("reprise.audio.title"), b ->
+            minecraft.setScreen(new AudioCueScreen(this, session))).bounds(246, 78, 68, 20).build());
         saveClip = toolbarButton(Component.translatable("reprise.editor.save_clip"), b -> saveClip(), "reprise.editor.save_clip.tooltip");
         int topX = 6;
         for (Button button : new Button[]{undoButton, redoButton, saveClip, freezeButton}) {
@@ -157,7 +159,6 @@ public final class EditorScreen extends Screen {
         toolbarGroups = new Button[][] {{playButton, slower, speedButton, faster}, {addKey, interpolationButton, delete},
             {speedKey, pathButton, namesButton}, {rangeStart, rangeEnd}, {export, exit}};
         layoutToolbar();
-        this.timeline.setBounds(10, height - TIMELINE_HEIGHT - TIMELINE_BOTTOM_MARGIN, width - 20, TIMELINE_HEIGHT);
         updateLabels();
     }
 
@@ -192,7 +193,10 @@ public final class EditorScreen extends Screen {
             }
             x += width < 400 ? 2 : 4;
         }
-        panelHeight = 64 + row * ROW_STEP;
+        int audioHeight = project().audioCues.isEmpty() ? 0 : Timeline.AUDIO_HEIGHT;
+        int timelineHeight = TIMELINE_HEIGHT + audioHeight;
+        timeline.setBounds(10, height - timelineHeight - TIMELINE_BOTTOM_MARGIN, width - 20, timelineHeight);
+        panelHeight = 64 + row * ROW_STEP + audioHeight;
         for (Button[] group : toolbarGroups) {
             for (Button button : group) button.setY(height - panelHeight + 4 + button.getY());
         }
@@ -392,8 +396,12 @@ public final class EditorScreen extends Screen {
             if (!project().freezes.isEmpty()) tip = Component.translatable("reprise.editor.shot_world_time",
                 Timecode.precise(hover), Timecode.precise(project().worldTick(hover))).getString();
             SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
-            var marker = this.timeline.markerAt(this.session, mouseX);
-            if (speed != null) {
+            var marker = this.timeline.inAudioLane(session, mouseY) ? null : this.timeline.markerAt(this.session, mouseX);
+            var cue = timeline.audioCueAt(session, mouseX, mouseY);
+            if (cue != null) {
+                tip = Component.translatable("reprise.audio.hover", java.nio.file.Path.of(cue.file()).getFileName().toString(),
+                    Double.toString(cue.tick())).getString();
+            } else if (speed != null) {
                 tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed((float) speed.speed),
                     Component.translatable(speed.hold ? "reprise.interpolation.hold" : "reprise.interpolation.linear")).getString();
             } else if (marker != null) {
@@ -432,7 +440,13 @@ public final class EditorScreen extends Screen {
             this.panning = !doubleClick;
             return true;
         }
-        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.hasShiftDown()) {
+        var audioCue = timeline.audioCueAt(session, event.x(), event.y());
+        if (audioCue != null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && doubleClick) {
+            jumpToCue(audioCue.tick());
+            minecraft.setScreen(new AudioCueScreen(this, session));
+            return true;
+        }
+        if (!timeline.inAudioLane(session, event.y()) && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.hasShiftDown()) {
             choosingRange = true;
             rangeDragged = false;
             rangeStartX = rangeEndX = Math.clamp(event.x(), timeline.x, timeline.x + timeline.width);
@@ -452,7 +466,7 @@ public final class EditorScreen extends Screen {
             return true;
         }
         Keyframe hit = this.timeline.keyframeAt(this.session, event.x(), event.y());
-        if (hit == null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+        if (hit == null && !timeline.inAudioLane(session, event.y()) && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             var marker = this.timeline.markerAt(this.session, event.x());
             if (marker != null && doubleClick) {
                 jumpToCue(project().shotTick(marker.tick));
@@ -575,6 +589,7 @@ public final class EditorScreen extends Screen {
             selection.clear();
             this.dragging = null;
             this.session.refreshEnvironment();
+            layoutToolbar();
             updateLabels();
         }
     }

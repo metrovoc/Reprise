@@ -124,7 +124,7 @@ final class ExportQueueScreen extends Screen {
             session.setQueuedProject(shot.project());
             session.seek(shot.project().start());
             apply(shot.camera(), shot.spectating());
-            VideoExporter.start(session, shot.project().export, this);
+            SoundtrackPreparationScreen.start(session, shot.project().export, this);
         } catch (Exception e) {
             Reprise.LOGGER.warn("Could not start queued shot", e);
             if (returnCamera != null) completed(false, Component.literal(String.valueOf(e.getMessage())), true);

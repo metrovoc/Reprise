@@ -129,6 +129,12 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   or drag any other key to anchor the first. Crossing the anchor reverses key order.
 - Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
   or paste. Paste places the earliest copied key at the playhead and preserves the spacing of the others. Keys
+- **Audio cues** places music, narration or effects at a shot tick. Choose a local file or drop it into the cue
+  window. Set its source offset, length and volume. Overlapping cues mix in stereo. The waveform follows
+  video time through speed changes and world freezes. Double-click a waveform to edit its cue, or use **Previous cue** and **Next cue** to reach overlapping clips.
+  Reprise links the original files, so keep them available when reopening a project or rendering a queued shot.
+  WAV works with the built-in audio reader. Other formats such as FLAC use ffmpeg. Adding the first cue enables
+  **Sound** for export.
   at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
 - **Camera shake** adds handheld movement from the current shot tick. Set the horizontal and vertical
   rates in hertz and their angles in degrees. Enter a fractional tick to place or move the key precisely. **Linear** gradually changes both settings toward the next
@@ -213,7 +219,7 @@ follows the replay and the shader frame counter advances once per exported frame
   enter the height of one eye’s view. Set **Start tick** and **End tick** to trim the shot precisely. Equal
   boundaries export a single frame. Leave either field blank to follow that end of the timeline. The dialog
   previews dimensions, video duration, and frame count before saving.
-- Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
+- **Sound** mixes the replay sounds heard at the camera with authored audio cues in 48 kHz stereo.
 
 To batch shots from one replay, open **Queue** in the export screen and choose **Add current shot**.
 Each entry saves the current range, camera path or viewpoint, spectated player, scene settings, and encoder
