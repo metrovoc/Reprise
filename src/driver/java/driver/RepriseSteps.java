@@ -35,6 +35,10 @@ public final class RepriseSteps {
                 default -> throw new IllegalArgumentException(arg);
             }
         });
+        Driver.STEPS.put("connect", (mc, arg) -> net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
+            net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
+            new net.minecraft.client.multiplayer.ServerData("Test", arg, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null));
+        Driver.STEPS.put("disconnect", (mc, arg) -> mc.disconnectFromWorld(net.minecraft.network.chat.Component.literal("bye")));
         Driver.STEPS.put("replay", (mc, arg) -> {
             String[] a = arg.split(" ");
             ReplaySession s = ReplaySession.active();

@@ -1,0 +1,12 @@
+replay latest
+wait 100
+replay spectate
+replay seek 100
+wait 10
+replay state
+shot mp_play
+replay seek 20
+replay play
+wait 60
+replay state
+quit

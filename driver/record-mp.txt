@@ -1,0 +1,26 @@
+connect localhost:25599
+wait 200
+gui 2
+cmd gamerule send_command_feedback false
+cmd gamemode creative
+cmd time set 1000
+fly on
+cmd tp @s 0 90 0 0 30
+wait 40
+cmd summon minecraft:pig ~2 ~-3 ~4
+cmd summon minecraft:sheep ~-2 ~-3 ~5
+record start
+wait 20
+chat Hello from the recorded server!
+wait 40
+cmd setblock ~ ~-2 ~3 minecraft:gold_block
+wait 40
+shot mp_live
+record state
+wait 20
+record stop
+wait 10
+fly off
+disconnect
+wait 40
+quit
