@@ -67,6 +67,14 @@ class SegmentContinuationTest {
         try (ReplayFile replay = new ReplayFile(archive)) {
             assertEquals(72_000, replay.meta().durationTicks);
             assertEquals(1, replay.meta().chunkCount);
+            ByteBuffer terrain = replay.chunkView(0);
+            assertTrue(terrain.isReadOnly());
+            assertEquals(packet.length, terrain.capacity());
+            terrain.get();
+            assertEquals(0, replay.chunkView(0).position());
+            byte[] editableCopy = replay.chunk(0);
+            editableCopy[0] = 1;
+            assertArrayEquals(packet, replay.chunk(0));
             for (int index = 0; index < 12; index++) {
                 ReplayMeta.Segment segment = replay.meta().segments.get(index);
                 ByteBuffer actions = replay.segmentActions(index);

@@ -111,12 +111,15 @@ public final class RepriseSteps {
                 case "speed" -> s.setSpeed(Float.parseFloat(a[1]));
                 case "seek" -> {
                     int target = Math.clamp(Integer.parseInt(a[1]), 0, s.duration());
+                    var memory = java.lang.management.ManagementFactory.getPlatformMXBean(com.sun.management.ThreadMXBean.class);
+                    long before = memory.getCurrentThreadAllocatedBytes();
                     long start = System.nanoTime();
                     s.seek(target);
                     if (s.tick() != target) {
                         throw new IllegalStateException("Seek stopped at tick " + s.tick() + ", expected " + target);
                     }
-                    LOG.info("[driver] sought to tick {} in {} ms", target, (System.nanoTime() - start) / 1_000_000);
+                    LOG.info("[driver] sought to tick {} in {} ms, allocated {} bytes on client thread", target,
+                        (System.nanoTime() - start) / 1_000_000, memory.getCurrentThreadAllocatedBytes() - before);
                 }
                 case "block" -> {
                     var pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));

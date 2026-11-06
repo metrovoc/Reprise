@@ -3,6 +3,7 @@ package com.metrovoc.reprise.format;
 import com.metrovoc.reprise.util.Varints;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.io.Closeable;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.SoftReference;
@@ -34,6 +35,9 @@ public final class ReplayFile implements Closeable {
         }
         try (InputStream in = this.zip.getInputStream(metaEntry)) {
             this.meta = ReplayMeta.fromJson(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        } catch (IOException | RuntimeException e) {
+            this.zip.close();
+            throw e;
         }
     }
 
@@ -57,7 +61,14 @@ public final class ReplayFile implements Closeable {
             return null;
         }
         try (InputStream in = this.zip.getInputStream(entry)) {
-            return in.readAllBytes();
+            // The ZIP directory gives the inflated size. Fill the final array directly even for large terrain files.
+            long size = entry.getSize();
+            if (size < 0 || size > Integer.MAX_VALUE - 8) {
+                throw new IOException("Unsupported replay entry size for " + name + ": " + size);
+            }
+            byte[] data = new byte[(int) size];
+            new DataInputStream(in).readFully(data);
+            return data;
         }
     }
 
@@ -111,7 +122,18 @@ public final class ReplayFile implements Closeable {
     }
 
     /** An encoded chunk packet from the chunk cache. */
-    public synchronized byte[] chunk(int index) throws IOException {
+    public byte[] chunk(int index) throws IOException {
+        ByteBuffer packet = chunkView(index);
+        byte[] bytes = new byte[packet.remaining()];
+        packet.get(bytes);
+        return bytes;
+    }
+
+    /** A bounded view for the terrain decoder. Its content belongs to the archive. */
+    public synchronized ByteBuffer chunkView(int index) throws IOException {
+        if (index < 0 || index >= this.meta.chunkCount) {
+            throw new IOException("Missing cached chunk " + index);
+        }
         int fileIndex = index / Actions.CHUNKS_PER_FILE;
         SoftReference<ChunkFile> ref = this.chunkFiles.get(fileIndex);
         ChunkFile file = ref == null ? null : ref.get();
@@ -133,10 +155,11 @@ public final class ReplayFile implements Closeable {
             this.chunkFiles.put(fileIndex, new SoftReference<>(file));
         }
         int local = index % Actions.CHUNKS_PER_FILE;
+        if (local >= file.offsets.size()) {
+            throw new IOException("Missing chunk " + index + " in cache file " + fileIndex);
+        }
         int start = file.offsets.getInt(local);
-        byte[] out = new byte[file.lengths.getInt(local)];
-        System.arraycopy(file.data, start, out, 0, out.length);
-        return out;
+        return ByteBuffer.wrap(file.data).slice(start, file.lengths.getInt(local)).asReadOnlyBuffer();
     }
 
     @Override

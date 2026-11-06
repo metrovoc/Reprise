@@ -372,7 +372,7 @@ public final class ReplaySession {
                     this.tick++;
                     return;
                 }
-                case Actions.GAME_PACKET -> deliverGame(readBytes());
+                case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
                 case Actions.CHUNK_REF -> deliverChunk(Varints.read(this.reader));
                 case Actions.CONFIG_PACKET -> readBytes(); // only valid inside a snapshot
                 case Actions.SNAPSHOT_END -> { }
@@ -481,7 +481,7 @@ public final class ReplaySession {
                     break;
                 }
                 switch (action) {
-                    case Actions.GAME_PACKET -> deliverGame(readBytes());
+                    case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
                     case Actions.CONFIG_PACKET -> readBytes();
                     default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");
@@ -561,13 +561,13 @@ public final class ReplaySession {
 
     private void deliverChunk(int index) {
         try {
-            deliverGame(this.file.chunk(index));
+            deliverGame(this.file.chunkView(index));
         } catch (IOException e) {
             Reprise.LOGGER.warn("Missing cached chunk {}", index, e);
         }
     }
 
-    private void deliverGame(byte[] bytes) {
+    private void deliverGame(ByteBuffer bytes) {
         ClientPacketListener listener = this.mc.getConnection();
         if (listener == null) {
             if (this.connection != null && this.connection.getPacketListener() instanceof ClientPacketListener pending) {
