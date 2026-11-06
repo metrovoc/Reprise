@@ -32,7 +32,12 @@ public final class PlaybackControls {
 
     public static void register(IEventBus bus) {
         bus.addListener(EventPriority.HIGHEST, ClientTickEvent.Pre.class, e -> tick());
-        bus.addListener(RenderFrameEvent.Pre.class, e -> frame(e.getPartialTick().getGameTimeDeltaPartialTick(false)));
+        bus.addListener(RenderFrameEvent.Post.class, e -> {
+            var exporter = com.metrovoc.reprise.export.VideoExporter.running();
+            if (exporter != null) {
+                exporter.afterRender();
+            }
+        });
         bus.addListener(RenderGuiEvent.Post.class, e -> hud(e.getGuiGraphics(), e.getPartialTick().getGameTimeDeltaPartialTick(false)));
         bus.addListener(ClientPlayerNetworkEvent.LoggingOut.class, e -> {
             ReplaySession session = ReplaySession.active();
@@ -126,7 +131,7 @@ public final class PlaybackControls {
         }
     }
 
-    private static void frame(float partialTick) {
+    public static void frame(float partialTick) {
         ReplaySession session = ReplaySession.active();
         if (session == null) {
             return;

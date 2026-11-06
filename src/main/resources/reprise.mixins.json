@@ -8,7 +8,11 @@
     "record.ClientLevelMixin",
     "playback.MinecraftMixin",
     "playback.LocalPlayerMixin",
-    "playback.ClientPacketListenerMixin"
+    "playback.ClientPacketListenerMixin",
+    "export.DeltaTrackerTimerMixin",
+    "export.WindowMixin",
+    "export.GameRendererMixin",
+    "playback.RenderSectionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

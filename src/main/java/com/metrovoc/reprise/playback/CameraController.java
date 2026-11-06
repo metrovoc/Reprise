@@ -28,7 +28,7 @@ public final class CameraController {
         double dt = lastNanos == 0 ? 0 : Math.min(0.1, (now - lastNanos) / 1e9);
         lastNanos = now;
         LocalPlayer camera = mc.player;
-        if (camera == null || mc.getCameraEntity() != camera || CameraPath.isDriving()) {
+        if (camera == null || mc.getCameraEntity() != camera || CameraPath.isDriving() || com.metrovoc.reprise.export.VideoExporter.isRunning()) {
             velocity = Vec3.ZERO;
             return;
         }

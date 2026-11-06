@@ -1,0 +1,18 @@
+replay latest
+wait 100
+replay clear
+replay camera -6 -54 -4 -30 20
+replay keyframe
+replay seek 64
+replay camera 0 -52 -8 0 30
+replay keyframe
+replay seek 128
+replay camera 8 -54 0 60 25
+replay keyframe
+replay seek 0
+wait 5
+replay export 1280 720 30
+wait 300
+shot after_export
+replay state
+quit

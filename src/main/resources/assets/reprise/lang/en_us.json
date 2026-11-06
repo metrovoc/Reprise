@@ -12,30 +12,24 @@
   "key.reprise.add_keyframe": "Replay: Add Camera Keyframe",
   "key.reprise.roll_left": "Replay: Roll Left",
   "key.reprise.roll_right": "Replay: Roll Right",
-
   "reprise.recording.started": "Recording started",
   "reprise.recording.paused": "Recording paused",
   "reprise.recording.resumed": "Recording resumed",
   "reprise.recording.marker": "Marker added",
   "reprise.recording.saved": "Replay saved: %s",
-
   "reprise.menu.replays": "Replays",
   "reprise.menu.replays.tooltip": "Watch and edit your recordings",
   "reprise.menu.start_recording": "Start Recording",
   "reprise.menu.stop_recording": "Stop Recording",
-
   "reprise.browser.title": "Replays",
   "reprise.browser.play": "Watch",
   "reprise.browser.folder": "Open Folder",
   "reprise.browser.empty": "No replays yet. Start recording from the pause menu.",
   "reprise.browser.delete.question": "Delete this replay for good?",
-
   "reprise.replay.loading": "Loading replay…",
   "reprise.replay.failed": "This replay could not be opened",
-
   "reprise.hud.hint": "%s editor · %s play",
   "reprise.hud.spectating": "Spectating %s · sneak to leave",
-
   "reprise.editor.title": "Replay Editor",
   "reprise.editor.play": "Play/Pause",
   "reprise.editor.speed": "Playback speed; click for 1×",
@@ -52,11 +46,25 @@
   "reprise.editor.export": "Export",
   "reprise.editor.exit": "Exit Replay",
   "reprise.editor.selected": "Keyframe %s · right-click to change its curve, drag to move, Delete to remove",
-
   "reprise.interpolation.smooth": "Smooth",
   "reprise.interpolation.linear": "Linear",
   "reprise.interpolation.ease": "Ease",
   "reprise.interpolation.hold": "Hold",
-
-  "reprise.export.title": "Export Video"
+  "reprise.export.title": "Export Video",
+  "reprise.export.format": "Format: %s",
+  "reprise.export.resolution": "Resolution: %s",
+  "reprise.export.fps": "Frame rate: %s fps",
+  "reprise.export.quality": "Quality (CRF): %s, lower is better",
+  "reprise.export.start": "Export",
+  "reprise.export.range": "%s to %s · %s frames",
+  "reprise.export.no_keyframes": "No keyframes: the camera stays where it is",
+  "reprise.export.keyframes": "Camera path from %s keyframes",
+  "reprise.export.no_ffmpeg": "ffmpeg not found. Install it, or put it in reprise/ffmpeg, or export PNGs.",
+  "reprise.export.progress": "Exporting…",
+  "reprise.export.progress.line": "Frame %s of %s · %s fps · %s s left",
+  "reprise.export.cancelled": "Export cancelled",
+  "reprise.export.failed": "Export failed: %s",
+  "reprise.export.done": "Saved %s",
+  "reprise.export.done.title": "Export finished",
+  "reprise.export.failed.title": "Export stopped"
 }

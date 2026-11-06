@@ -64,6 +64,18 @@ public final class RepriseSteps {
                     Entity target = mc.level.getEntity(s.recorderId());
                     mc.setCameraEntity(target);
                 }
+                case "export" -> {
+                    var settings = s.project().export;
+                    settings.width = Integer.parseInt(a[1]);
+                    settings.height = Integer.parseInt(a[2]);
+                    settings.fps = Integer.parseInt(a[3]);
+                    settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
+                    com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
+                }
+                case "clear" -> {
+                    s.project().keyframes.clear();
+                    s.project().save();
+                }
                 case "exit" -> s.exit();
                 case "state" -> {
                     int entities = 0;
