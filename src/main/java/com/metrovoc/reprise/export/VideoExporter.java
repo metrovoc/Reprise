@@ -107,6 +107,9 @@ public final class VideoExporter {
 
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         String base = session.file().path().getFileName().toString().replaceFirst("\\.reprise$", "") + "_" + stamp;
+        if (returnTo instanceof ExportQueueScreen queue && !queue.shotName().isBlank()) {
+            base = net.minecraft.util.FileUtil.sanitizeName(queue.shotName()) + "_" + stamp;
+        }
         Path dir = ReprisePaths.exports();
         boolean sequence = settings.format == ExportSettings.Format.PNG_SEQUENCE;
         this.files = new ExportFiles(dir, base, sequence ? "" : "." + settings.format.extension);
@@ -432,7 +435,7 @@ public final class VideoExporter {
                 this.sink.frame(bytes);
                 written++;
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException | java.nio.channels.ClosedByInterruptException e) {
             Thread.currentThread().interrupt();
         } catch (Throwable t) {
             this.writeError = t;
@@ -502,7 +505,9 @@ public final class VideoExporter {
         } else {
             Reprise.LOGGER.info("Export stopped after {} frames", this.frame);
         }
-        if (showResult) this.mc.setScreen(new ExportDoneScreen(this.returnTo, ok, message, output));
+        if (this.returnTo instanceof ExportQueueScreen queue) {
+            queue.completed(ok, message, showResult);
+        } else if (showResult) this.mc.setScreen(new ExportDoneScreen(this.returnTo, ok, message, output));
     }
 
     private void abortWriter() {

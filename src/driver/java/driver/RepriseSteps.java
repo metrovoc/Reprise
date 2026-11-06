@@ -156,7 +156,7 @@ public final class RepriseSteps {
                     s.project().exportStart = Integer.parseInt(a[1]);
                     s.project().exportEnd = Integer.parseInt(a[2]);
                 }
-                case "export" -> {
+                case "export", "export_settings" -> {
                     var settings = s.project().export;
                     settings.width = Integer.parseInt(a[1]);
                     settings.height = Integer.parseInt(a[2]);
@@ -166,7 +166,7 @@ public final class RepriseSteps {
                     settings.audio = java.util.Arrays.asList(a).contains("audio");
                     settings.supersample = java.util.Arrays.asList(a).contains("ssaa");
                     settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");
-                    com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
+                    if (a[0].equals("export")) com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
                 }
                 case "clear" -> {
                     s.project().keyframes.clear();

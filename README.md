@@ -108,6 +108,12 @@ follows the replay and the shader frame counter advances once per exported frame
 - Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.
 - Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
 
+To batch shots from one replay, open **Queue** in the export screen and choose **Add current shot**.
+Each entry saves the current range, camera path or viewpoint, spectated player, scene settings, and encoder
+settings. You can name, reorder, or remove shots before choosing **Render queue**. Completed shots leave
+the queue. Cancelling or hitting an error keeps the unfinished shot and later entries for retry, even after
+restarting Minecraft.
+
 Completed exports appear in the exports folder after all frames and any soundtrack are written. You can cancel
 with Escape or **Cancel**. Repeated exports with the same name get a numbered suffix.
 

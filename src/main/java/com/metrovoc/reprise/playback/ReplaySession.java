@@ -108,6 +108,7 @@ public final class ReplaySession {
     private int failedPackets;
     private UUID spectating;
     private final com.metrovoc.reprise.editor.ReplayProject project;
+    private com.metrovoc.reprise.editor.ReplayProject queuedProject;
 
     private ReplaySession(ReplayFile file, Screen exitScreen) {
         this.file = file;
@@ -119,7 +120,12 @@ public final class ReplaySession {
     }
 
     public com.metrovoc.reprise.editor.ReplayProject project() {
-        return this.project;
+        return this.queuedProject != null ? this.queuedProject : this.project;
+    }
+
+    public void setQueuedProject(com.metrovoc.reprise.editor.ReplayProject value) {
+        this.queuedProject = value;
+        refreshEnvironment();
     }
 
     /** The replay time shown on screen, in ticks, with the fraction the renderer is between ticks. */
@@ -209,7 +215,7 @@ public final class ReplaySession {
     }
 
     public static boolean hides(Layer layer) {
-        return active != null && active.project.environment.hidden.contains(layer);
+        return active != null && active.project().environment.hidden.contains(layer);
     }
 
     public boolean isPlaying() {
@@ -240,6 +246,17 @@ public final class ReplaySession {
     public void spectate(Entity entity) {
         this.spectating = entity.getUUID();
         this.mc.setCameraEntity(entity);
+    }
+
+    public UUID spectatedId() {
+        return this.spectating;
+    }
+
+    public void restoreSpectating(UUID id) {
+        stopSpectating();
+        this.spectating = id;
+        Entity entity = id == null || this.mc.level == null ? null : this.mc.level.getEntity(id);
+        if (entity != null) this.mc.setCameraEntity(entity);
     }
 
     public void stopSpectating() {
@@ -292,7 +309,7 @@ public final class ReplaySession {
     /** Milliseconds per client tick while this replay plays. */
     public float millisPerTick() {
         // The path preview plays as the export will: at the speed keys' speed.
-        double speed = CameraPath.preview() && !this.project.speedKeys.isEmpty() ? this.project.speedAt(this.tick) : this.speed;
+        double speed = CameraPath.preview() && !project().speedKeys.isEmpty() ? project().speedAt(this.tick) : this.speed;
         return (float) (50.0 / Math.max(0.01, speed));
     }
 

@@ -44,6 +44,7 @@ public final class ReplayProject {
     public ExportSettings export = new ExportSettings();
 
     public com.metrovoc.reprise.gui.Timeline.View timelineView;
+    public transient final List<QueuedShot> renderQueue = new ArrayList<>();
     private transient Path path;
     private transient ProjectHistory history = new ProjectHistory();
     private transient JsonObject beforeEdit;
@@ -63,6 +64,9 @@ public final class ReplayProject {
             try {
                 JsonObject saved = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
                 project = ReplayMeta.GSON.fromJson(saved, ReplayProject.class);
+                if (saved.has("renderQueue")) {
+                    project.renderQueue.addAll(List.of(ReplayMeta.GSON.fromJson(saved.get("renderQueue"), QueuedShot[].class)));
+                }
                 if (saved.has("history")) {
                     project.history = ReplayMeta.GSON.fromJson(saved.get("history"), ProjectHistory.class);
                 }
@@ -84,10 +88,17 @@ public final class ReplayProject {
         return state;
     }
 
+    public void queueShot(String name, CameraPose camera, UUID spectating) {
+        ReplayProject snapshot = ReplayMeta.GSON.fromJson(state(), ReplayProject.class);
+        renderQueue.add(new QueuedShot(name.strip(), snapshot, camera, spectating));
+        save();
+    }
+
     public void save() {
         JsonObject state = state();
         finishEdit(state);
         if (this.timelineView != null) state.add("timelineView", ReplayMeta.GSON.toJsonTree(this.timelineView));
+        if (!this.renderQueue.isEmpty()) state.add("renderQueue", ReplayMeta.GSON.toJsonTree(this.renderQueue));
         state.add("history", ReplayMeta.GSON.toJsonTree(this.history));
         try {
             Path temp = Files.createTempFile(this.path.getParent(), ".project-", ".tmp");

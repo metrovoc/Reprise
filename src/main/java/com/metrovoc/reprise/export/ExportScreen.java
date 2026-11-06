@@ -62,10 +62,12 @@ public final class ExportScreen extends Screen {
             this.settings.width = r[0];
             this.settings.height = r[1];
         });
-        cycle(x, y + 48, w, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> {
+        cycle(x, y + 48, w / 2 - 2, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> {
             this.settings.fps = next(FRAME_RATES, this.settings.fps);
             updateFrameCount();
         });
+        addRenderableWidget(Button.builder(Component.translatable("reprise.queue.open", this.session.project().renderQueue.size()),
+            b -> this.minecraft.setScreen(new ExportQueueScreen(this, this.session))).bounds(x + w / 2 + 2, y + 48, w / 2 - 2, 20).build());
         cycle(x, y + 96, w / 2 - 2, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
             () -> this.settings.audio = !this.settings.audio);
         this.qualityButton = cycle(x, y + 72, w / 2 - 2, this::qualityLabel, () -> {
