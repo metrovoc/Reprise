@@ -130,6 +130,10 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
 - Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
   or paste. Paste places the earliest copied key at the playhead and preserves the spacing of the others. Keys
   at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
+- **Camera shake** adds handheld movement from the current shot tick. Set the horizontal and vertical
+  rates in hertz and their angles in degrees. Enter a fractional tick to place or move the key precisely. **Linear** gradually changes both settings toward the next
+  shake key. Use easing for a gentler transition or **Hold** for an abrupt change at the next key. Set both angles to zero to end the movement, or use
+  **Shake: Off** to mute the track. Shake follows video time through speed changes and world freezes.
 - For a moving subject, frame the shot with the free camera, open **Entities**, select the subject and choose eyes,
   center or feet. **Aim keyframe** pans from the camera path to keep that point in frame. **Follow keyframe** also
   carries the camera with the subject. Two **Orbit keyframes** around the same subject and target point move the

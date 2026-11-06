@@ -143,6 +143,11 @@ public final class Timeline {
                 diamond(g, xOf(preview, duration), mid, KEYFRAME_SELECTED, k.interpolation == Keyframe.Interpolation.HOLD);
             }
         }
+        for (var key : project.shakeKeys) {
+            if (!visible(key.tick(), duration)) continue;
+            int tx = xOf(key.tick(), duration);
+            g.fill(tx - 2, trackTop + 2, tx + 3, trackTop + 4, project.shakeEnabled ? 0xFF69C3B3 : 0xFF627673);
+        }
         for (var key : project.environment.keys) {
             double shot = project.shotTick(key.tick());
             if (!visible(shot, duration)) continue;

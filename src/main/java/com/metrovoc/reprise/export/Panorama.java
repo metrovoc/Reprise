@@ -114,6 +114,11 @@ public final class Panorama {
             case BOTTOM -> q.rotateX(-quarter);
             case FRONT -> { return new Vector3f(yaw, pitch, roll); }
         }
+        return cameraAngles(q, baseY);
+    }
+
+    /** Convert a composed camera rotation back to Minecraft angles, retaining yaw at a pole. */
+    public static Vector3f cameraAngles(Quaternionf q, float baseY) {
         var back = q.transformUnitPositiveZ(new Vector3f());
         double horizontal = Math.hypot(back.x, back.z);
         float y = horizontal < 1e-6 ? baseY : (float) Math.atan2(back.x, back.z);

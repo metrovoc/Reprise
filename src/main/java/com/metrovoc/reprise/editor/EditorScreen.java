@@ -111,6 +111,8 @@ public final class EditorScreen extends Screen {
             .bounds(6, 78, 60, 20).build());
         this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
             .bounds(68, 78, 60, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("reprise.shake.title"), b ->
+            minecraft.setScreen(new CameraShakeScreen(this, session))).bounds(132, 78, 110, 20).build());
         saveClip = toolbarButton(Component.translatable("reprise.editor.save_clip"), b -> saveClip(), "reprise.editor.save_clip.tooltip");
         int topX = 6;
         for (Button button : new Button[]{undoButton, redoButton, saveClip, freezeButton}) {

@@ -71,6 +71,9 @@ public final class ReplayProject {
     }
 
     public List<Keyframe> keyframes = new ArrayList<>();
+    public boolean shakeEnabled = true;
+    public List<CameraShake.Key> shakeKeys = new ArrayList<>();
+    private transient CameraShake shake;
     public List<SpeedKey> speedKeys = new ArrayList<>();
     /** The part of the replay to export, in ticks; -1 for the whole replay. */
     public int exportStart = -1;
@@ -132,6 +135,7 @@ public final class ReplayProject {
 
     public void save() {
         previewClock = null;
+        shake = null;
         JsonObject state = state();
         finishEdit(state);
         if (this.timelineView != null) state.add("timelineView", ReplayMeta.GSON.toJsonTree(this.timelineView));
@@ -190,6 +194,8 @@ public final class ReplayProject {
         if (!this.history.apply(current, forward)) return false;
         ReplayProject state = ReplayMeta.GSON.fromJson(current, ReplayProject.class);
         this.environment = state.environment;
+        this.shakeKeys = state.shakeKeys;
+        this.shakeEnabled = state.shakeEnabled;
         this.hideNames = state.hideNames;
         this.entityOverrides = state.entityOverrides;
         this.freezes = state.freezes;
@@ -212,6 +218,7 @@ public final class ReplayProject {
         freezes = updated;
         for (var key : keyframes) if (key.tick > shotTick) key.tick += length;
         for (var key : speedKeys) if (key.tick > shotTick) key.tick += length;
+        shakeKeys.replaceAll(k -> k.tick() > shotTick ? k.at(k.tick() + length) : k);
         if (exportStart > shotTick) exportStart += length;
         if (exportEnd >= shotTick) exportEnd += length;
         save();
@@ -248,7 +255,9 @@ public final class ReplayProject {
 
     public void sort() {
         previewClock = null;
+        shake = null;
         this.keyframes.sort(Comparator.comparingDouble(k -> k.tick));
+        this.shakeKeys.sort(Comparator.comparingDouble(CameraShake.Key::tick));
         this.speedKeys.sort(Comparator.comparingDouble(k -> k.tick));
     }
 
@@ -272,13 +281,25 @@ public final class ReplayProject {
         return keys.get(keys.size() - 1).speed;
     }
 
-    public float previewMillisPerTick(int tick, int duration) {
-        if (tick >= duration) return (float) (50 / Math.max(0.001, speedAt(tick)));
+    public CameraShake shake(int duration) {
+        FrameSchedule clock = previewClock(duration);
+        if (shake == null) shake = new CameraShake(shakeKeys, clock);
+        return shake;
+    }
+
+    private FrameSchedule previewClock(int duration) {
         if (previewClock == null || previewDuration != duration) {
             previewClock = frameSchedule(0, duration, 20);
             previewDuration = duration;
+            shake = null;
         }
-        return (float) (50 * (previewClock.videoTimeAt(tick + 1.0) - previewClock.videoTimeAt(tick)));
+        return previewClock;
+    }
+
+    public float previewMillisPerTick(int tick, int duration) {
+        if (tick >= duration) return (float) (50 / Math.max(0.001, speedAt(tick)));
+        FrameSchedule clock = previewClock(duration);
+        return (float) (50 * (clock.videoTimeAt(tick + 1.0) - clock.videoTimeAt(tick)));
     }
 
     public FrameSchedule frameSchedule(int start, int end, double fps) {
@@ -306,6 +327,7 @@ public final class ReplayProject {
         neighbor.consider(end(duration));
         for (var key : keyframes) neighbor.consider(key.tick);
         for (var key : speedKeys) neighbor.consider(key.tick);
+        for (var key : shakeKeys) neighbor.consider(key.tick());
         for (var key : environment.keys) neighbor.consider(shotTick(key.tick()));
         for (var marker : markers) neighbor.consider(shotTick(marker.tick));
         int extra = 0;
