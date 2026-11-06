@@ -127,7 +127,7 @@
   "key.reprise.slower": "Replay: Slower",
   "key.reprise.faster": "Replay: Faster",
   "key.reprise.open_editor": "Replay: Editor",
-  "key.reprise.add_keyframe": "Replay: Add Camera Keyframe",
+  "key.reprise.add_keyframe": "Replay: Add Camera Key",
   "key.reprise.roll_left": "Replay: Roll Left",
   "key.reprise.roll_right": "Replay: Roll Right",
   "reprise.recording.started": "● Recording — pause or stop it from the game menu",
@@ -429,5 +429,7 @@
   "reprise.shake.curve.ease_out": "ease out",
   "reprise.shake.curve.ease_in_out": "ease in and out",
   "reprise.shake.mute": "Turn off",
-  "reprise.shake.unmute": "Turn on"
+  "reprise.shake.unmute": "Turn on",
+  "key.reprise.path_preview": "Replay: Preview Camera Path",
+  "key.reprise.players": "Replay: Players and Mobs"
 }

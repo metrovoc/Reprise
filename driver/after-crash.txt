@@ -1,0 +1,13 @@
+# Next start after a crash: the recording is recovered and plays to where it was killed.
+wait 100
+keyconflicts
+press Replays
+wait 20
+shot c01_library_after_crash
+replay latest
+wait 120
+replay seek 240
+wait 10
+replay state
+shot c02_recovered_end
+quit

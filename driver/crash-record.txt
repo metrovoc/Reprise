@@ -1,0 +1,11 @@
+# Auto-recording starts by itself; the game is then killed from outside mid-recording.
+world
+cmd gamerule send_command_feedback false
+fly on
+cmd tp @s 0 -55 0 0 20
+wait 40
+record state
+cmd setblock 2 -60 4 minecraft:gold_block
+wait 200
+record state
+wait 2000

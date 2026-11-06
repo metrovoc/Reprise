@@ -1,0 +1,17 @@
+gui 2
+wait 40
+press Options
+wait 5
+press Controls
+wait 5
+click 868 47
+wait 10
+inspect
+hover 790 400
+scroll -400
+wait 5
+shot k01_keybinds_bottom
+scroll 8
+wait 5
+shot k02_keybinds_above
+quit

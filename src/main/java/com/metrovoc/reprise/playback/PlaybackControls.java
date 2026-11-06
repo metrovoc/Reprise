@@ -149,6 +149,9 @@ public final class PlaybackControls {
         }
         Minecraft mc = Minecraft.getInstance();
         session.clientTick();
+        // Social interactions (P) and advancements (L) have no meaning in a replay and share keys with its controls.
+        while (mc.options.keySocialInteractions.consumeClick() || mc.options.keyAdvancements.consumeClick()) {
+        }
         if (mc.screen == null && mc.player != null) {
             while (RepriseKeys.OPEN_EDITOR.consumeClick()) {
                 mc.setScreen(new EditorScreen(session));
@@ -167,6 +170,13 @@ public final class PlaybackControls {
             }
             while (RepriseKeys.FASTER.consumeClick()) {
                 changeSpeed(session, true);
+            }
+            while (RepriseKeys.PATH_PREVIEW.consumeClick()) {
+                CameraPath.setPreview(!CameraPath.preview());
+                mc.gui.setOverlayMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.preview.on" : "reprise.editor.preview.off"), false);
+            }
+            while (RepriseKeys.PLAYERS.consumeClick()) {
+                EditorScreen.openPlayers(session);
             }
             while (RepriseKeys.ADD_KEYFRAME.consumeClick()) {
                 addKeyframe(session);

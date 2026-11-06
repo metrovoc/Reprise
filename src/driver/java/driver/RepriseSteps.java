@@ -137,6 +137,20 @@ public final class RepriseSteps {
             net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
             new net.minecraft.client.multiplayer.ServerData("Test", arg, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null));
         Driver.STEPS.put("disconnect", (mc, arg) -> mc.disconnectFromWorld(net.minecraft.network.chat.Component.literal("bye")));
+        // Lists every Reprise key that clashes with another binding by NeoForge's own rules (as the Controls screen shows).
+        Driver.STEPS.put("keyconflicts", (mc, arg) -> {
+            int clashes = 0;
+            for (var ours : mc.options.keyMappings) {
+                if (!ours.getName().startsWith("key.reprise.") || ours.isUnbound()) continue;
+                for (var other : mc.options.keyMappings) {
+                    if (other != ours && !other.isUnbound() && ours.same(other)) {
+                        LOG.info("[driver] key conflict: {} and {} on {}", ours.getName(), other.getName(), ours.getTranslatedKeyMessage().getString());
+                        clashes++;
+                    }
+                }
+            }
+            LOG.info("[driver] key conflicts: {}", clashes);
+        });
         Driver.STEPS.put("menu", (mc, arg) -> {
             if (!(mc.screen instanceof EditorScreen editor) || !editor.chooseMenuItem(arg)) throw new IllegalStateException("no menu item " + arg);
         });

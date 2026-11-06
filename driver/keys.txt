@@ -1,0 +1,13 @@
+replay latest
+wait 120
+key p
+wait 10
+replay state
+key l
+wait 5
+replay state
+key b
+wait 5
+shot kk_players
+replay state
+quit

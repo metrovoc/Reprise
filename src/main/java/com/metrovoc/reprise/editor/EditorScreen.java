@@ -125,7 +125,7 @@ public final class EditorScreen extends Screen {
         fewerTurns = button(Component.literal("−⟲"), b -> changeTurns(-1), tip("reprise.editor.fewer_turns", null));
         moreTurns = button(Component.literal("+⟲"), b -> changeTurns(1), tip("reprise.editor.more_turns", null));
         previewButton = button(Component.translatable("reprise.editor.preview.off"), b -> CameraPath.setPreview(!CameraPath.preview()),
-            tip("reprise.editor.preview.tooltip", null));
+            tip("reprise.editor.preview.tooltip", RepriseKeys.PATH_PREVIEW));
         reserve(previewButton, "reprise.editor.preview.on", "reprise.editor.preview.off");
         moreButton = button(Component.translatable("reprise.editor.more"), b -> openMoreMenu(), null);
         exportButton = button(Component.translatable("reprise.editor.export"), b -> minecraft.setScreen(new ExportScreen(this, session)),
@@ -258,7 +258,8 @@ public final class EditorScreen extends Screen {
             .add(Component.translatable("reprise.editor.redo"), "Ctrl+Shift+Z", p.canRedo(), () -> restoreEdit(true))
             .separator()
             .add(Component.translatable("reprise.menu.scene"), () -> minecraft.setScreen(new EnvironmentScreen(this, session)))
-            .add(Component.translatable("reprise.menu.entities"), () -> minecraft.setScreen(new EntityScreen(this, session)))
+            .add(Component.translatable("reprise.menu.entities"), RepriseKeys.PLAYERS.getTranslatedKeyMessage().getString(), true,
+                () -> minecraft.setScreen(new EntityScreen(this, session)))
             .check(Component.translatable("reprise.menu.names"), !p.hideNames, () -> {
                 p.checkpoint();
                 p.hideNames = !p.hideNames;
@@ -286,6 +287,12 @@ public final class EditorScreen extends Screen {
             });
         }
         openMenu(m, moreButton);
+    }
+
+    /** Opens the players and mobs list over the editor, from the viewer's key. */
+    public static void openPlayers(ReplaySession session) {
+        var editor = new EditorScreen(session);
+        net.minecraft.client.Minecraft.getInstance().setScreen(new EntityScreen(editor, session));
     }
 
     /** Chooses an item of the open menu by the start of its label; for scripted tests. */
@@ -764,7 +771,7 @@ public final class EditorScreen extends Screen {
         if (dragging != null && (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT)) {
             return true;
         }
-        if (RepriseKeys.OPEN_EDITOR.matches(event)) {
+        if (RepriseKeys.OPEN_EDITOR.matches(event) && !(getFocused() instanceof net.minecraft.client.gui.components.EditBox)) {
             onClose();
             return true;
         }
@@ -821,6 +828,22 @@ public final class EditorScreen extends Screen {
         }
         if (RepriseKeys.ADD_KEYFRAME.matches(event)) {
             addKeyframe();
+            return true;
+        }
+        if (RepriseKeys.PATH_PREVIEW.matches(event)) {
+            CameraPath.setPreview(!CameraPath.preview());
+            return true;
+        }
+        if (RepriseKeys.PLAYERS.matches(event)) {
+            minecraft.setScreen(new EntityScreen(this, session));
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_EQUAL || event.key() == GLFW.GLFW_KEY_MINUS
+            || event.key() == GLFW.GLFW_KEY_KP_ADD || event.key() == GLFW.GLFW_KEY_KP_SUBTRACT) {
+            // Zoom around the playhead, as Flashback does with = and -.
+            boolean in = event.key() == GLFW.GLFW_KEY_EQUAL || event.key() == GLFW.GLFW_KEY_KP_ADD;
+            timeline.zoom(timeline.xOf(session.visualTick(1), session.duration()), in ? 1 : -1, session.duration());
+            project().timelineView = timeline.view(session.duration());
             return true;
         }
         return super.keyPressed(event);
