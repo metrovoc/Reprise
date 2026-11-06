@@ -81,7 +81,7 @@ public final class Timeline {
         return mx >= this.x - 4 && mx <= this.x + this.width + 4 && my >= this.y && my <= this.y + this.height;
     }
 
-    public void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, double tick, Keyframe selected, boolean detailed) {
+    public void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, double tick, java.util.Set<Keyframe> selected, boolean detailed) {
         int duration = Math.max(1, session.duration());
         ReplayProject project = session.project();
         int trackTop = this.y + (detailed ? 10 : 0);
@@ -131,7 +131,7 @@ public final class Timeline {
             if (!visible(k.tick, duration)) continue;
             int kx = xOf(k.tick, duration);
             int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
-            diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
+            diamond(g, kx, mid, selected.contains(k) ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
         }
         for (var key : project.environment.keys) {
             double shot = project.shotTick(key.tick());

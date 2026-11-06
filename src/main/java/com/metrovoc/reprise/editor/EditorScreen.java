@@ -31,10 +31,12 @@ public final class EditorScreen extends Screen {
 
     private final ReplaySession session;
     private final Timeline timeline = new Timeline();
-    private Keyframe selected;
+    private final java.util.LinkedHashSet<Keyframe> selection = new java.util.LinkedHashSet<>();
+
     private boolean scrubbing;
     private Keyframe dragging;
     private double dragStart;
+    private boolean dragCheckpoint;
     private boolean panning;
     private double scrubTick = -1;
     private long lastScrubSeek;
@@ -50,15 +52,26 @@ public final class EditorScreen extends Screen {
     private Button undoButton;
     private Button redoButton;
 
+    private Keyframe singleKey() {
+        return selection.size() == 1 ? selection.getFirst() : null;
+    }
+
+    private void selectOnly(Keyframe key) {
+        selection.clear();
+        if (key != null) selection.add(key);
+    }
+
     void addTargetKey(Keyframe.Target target) {
         this.session.setPlaying(false);
-        this.selected = PlaybackControls.addKeyframe(this.session, target);
+        selectOnly(PlaybackControls.addKeyframe(this.session, target));
         CameraPath.apply(CameraPath.evaluate(project().keyframes, this.session.tick(), 1));
     }
 
     private void changeTurns(int change) {
+        var key = singleKey();
+        if (key == null || key.target == null || key.target.mode() != Keyframe.Tracking.ORBIT) return;
         project().checkpoint();
-        this.selected.turns += change;
+        key.turns += change;
         project().save();
     }
 
@@ -87,8 +100,10 @@ public final class EditorScreen extends Screen {
             .bounds(6, 30, 60, 20).build());
         this.redoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.redo"), b -> restoreEdit(true))
             .bounds(68, 30, 60, 20).build());
-        this.editKey = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.edit_key"), b ->
-            minecraft.setScreen(new CameraKeyScreen(this, session, selected))).bounds(6, 78, 122, 20).build());
+        this.editKey = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.edit_key"), b -> {
+            var key = singleKey();
+            if (key != null) minecraft.setScreen(new CameraKeyScreen(this, session, key));
+        }).bounds(6, 78, 122, 20).build());
         this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
             .bounds(6, 54, 60, 20).build());
         this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
@@ -193,7 +208,8 @@ public final class EditorScreen extends Screen {
     }
 
     private void updateLabels() {
-        this.editKey.active = this.selected != null;
+        Keyframe selected = singleKey();
+        this.editKey.active = selected != null;
         this.undoButton.active = project().canUndo();
         this.redoButton.active = project().canRedo();
         this.saveClip.active = project().worldTick(project().start()) < project().worldTick(project().end(this.session.duration()));
@@ -201,15 +217,15 @@ public final class EditorScreen extends Screen {
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
         this.namesButton.setMessage(Component.translatable(project().hideNames ? "reprise.editor.names.off" : "reprise.editor.names.on"));
-        this.fewerTurns.visible = this.moreTurns.visible = this.selected != null && this.selected.target != null
-            && this.selected.target.mode() == Keyframe.Tracking.ORBIT;
-        this.interpolationButton.active = this.selected != null;
-        if (this.selected != null && this.selected.spectatorAfterKey != null) {
+        this.fewerTurns.visible = this.moreTurns.visible = selected != null && selected.target != null
+            && selected.target.mode() == Keyframe.Tracking.ORBIT;
+        this.interpolationButton.active = selected != null;
+        if (selected != null && selected.spectatorAfterKey != null) {
             this.interpolationButton.setMessage(Component.translatable("reprise.interpolation.spectator"));
         } else {
-            this.interpolationButton.setMessage(this.selected != null && this.selected.spline != null
+            this.interpolationButton.setMessage(selected != null && selected.spline != null
                 ? Component.translatable("reprise.interpolation.spline") : Component.translatable("reprise.interpolation." +
-                (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));
+                (selected == null ? Keyframe.Interpolation.SMOOTH : selected.interpolation).name().toLowerCase()));
         }
     }
 
@@ -223,7 +239,7 @@ public final class EditorScreen extends Screen {
     }
 
     private void addKeyframe() {
-        this.selected = PlaybackControls.addKeyframe(this.session, null);
+        selectOnly(PlaybackControls.addKeyframe(this.session, null));
     }
 
     private void addSpeedKey() {
@@ -237,27 +253,28 @@ public final class EditorScreen extends Screen {
     }
 
     private void deleteSelected() {
-        if (this.selected != null) {
+        if (!selection.isEmpty()) {
             project().checkpoint();
-            project().keyframes.remove(this.selected);
-            this.selected = null;
+            project().keyframes.removeAll(selection);
+            selection.clear();
             project().save();
         }
     }
 
     private void cycleInterpolation() {
-        if (this.selected != null) {
+        Keyframe selected = singleKey();
+        if (selected != null) {
             project().checkpoint();
             Keyframe.Interpolation[] values = Keyframe.Interpolation.values();
-            this.selected.spline = null;
-            if (this.selected.spectatorAfterKey != null) {
-                this.selected.spectatorAfterKey = null;
-                this.selected.interpolation = Keyframe.Interpolation.LINEAR;
-                int index = project().keyframes.indexOf(this.selected);
+            selected.spline = null;
+            if (selected.spectatorAfterKey != null) {
+                selected.spectatorAfterKey = null;
+                selected.interpolation = Keyframe.Interpolation.LINEAR;
+                int index = project().keyframes.indexOf(selected);
                 if (index + 1 < project().keyframes.size()) project().keyframes.get(index + 1).spectatorAtKey = null;
-                if (index == 0) this.selected.spectatorAtKey = null;
+                if (index == 0) selected.spectatorAtKey = null;
             } else {
-                this.selected.interpolation = values[(this.selected.interpolation.ordinal() + 1) % values.length];
+                selected.interpolation = values[(selected.interpolation.ordinal() + 1) % values.length];
             }
             project().save();
         }
@@ -291,25 +308,28 @@ public final class EditorScreen extends Screen {
         g.fill(0, top, this.width, this.height, Timeline.BACKGROUND);
         super.extractRenderState(g, mouseX, mouseY, a);
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
-        this.timeline.draw(g, this.font, this.session, shown, this.selected, true);
+        this.timeline.draw(g, this.font, this.session, shown, selection, true);
 
         String time = Timecode.precise(shown) + " / " + Timecode.format(this.session.duration());
         g.text(this.font, time, this.width - 10 - this.font.width(time), top + INFO_Y, 0xFFFFFFFF);
-        if (this.selected != null) {
-            String info = Component.translatable("reprise.editor.selected", Timecode.precise(this.selected.tick)).getString();
-            if (this.selected.target != null) {
-                String kind = switch (this.selected.target.mode()) {
+        Keyframe selected = singleKey();
+        if (selection.size() > 1) {
+            g.text(this.font, Component.translatable("reprise.editor.group_selected", selection.size()), 10, top + INFO_Y, 0xFFFFC94D);
+        } else if (selected != null) {
+            String info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
+            if (selected.target != null) {
+                String kind = switch (selected.target.mode()) {
                     case AIM -> "aim";
                     case FOLLOW -> "follow";
                     case ORBIT -> "orbit";
                 };
-                info = Component.translatable("reprise.editor.target." + kind, this.selected.target.name(),
-                    Timecode.precise(this.selected.tick), this.selected.turns).getString();
+                info = Component.translatable("reprise.editor.target." + kind, selected.target.name(),
+                    Timecode.precise(selected.tick), selected.turns).getString();
             }
-            if (this.selected.spectatorAfterKey != null) {
-                var actor = minecraft.level.getEntity(this.selected.spectatorAfterKey.intValue());
-                String name = actor == null ? "#" + this.selected.spectatorAfterKey : actor.getName().getString();
-                info = Component.translatable("reprise.editor.target.spectate", name, Timecode.precise(this.selected.tick)).getString();
+            if (selected.spectatorAfterKey != null) {
+                var actor = minecraft.level.getEntity(selected.spectatorAfterKey.intValue());
+                String name = actor == null ? "#" + selected.spectatorAfterKey : actor.getName().getString();
+                info = Component.translatable("reprise.editor.target.spectate", name, Timecode.precise(selected.tick)).getString();
             }
             g.text(this.font, info, 10, top + INFO_Y, 0xFFFFC94D);
         }
@@ -380,25 +400,28 @@ public final class EditorScreen extends Screen {
         }
         if (event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             if (hit != null) {
-                this.selected = hit;
+                selectOnly(hit);
                 cycleInterpolation();
             }
             return true;
         }
         if (hit != null) {
-            this.selected = hit;
+            if (event.hasShiftDown()) {
+                if (!selection.remove(hit)) selection.add(hit);
+                return true;
+            }
+            selectOnly(hit);
             if (doubleClick) {
                 this.session.seek((int) Math.round(hit.tick));
                 CameraPath.apply(CameraPath.evaluate(project().keyframes, hit.tick, 1));
                 CameraController.setRoll(hit.roll);
             } else {
-                project().checkpoint();
                 this.dragStart = hit.tick;
                 this.dragging = hit;
             }
             return true;
         }
-        this.selected = null;
+        selection.clear();
         this.scrubbing = true;
         this.scrubTick = this.timeline.tickAt(event.x(), this.session.duration());
         return true;
@@ -412,7 +435,12 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (this.dragging != null) {
-            this.dragging.tick = Math.round(this.timeline.tickAt(event.x(), this.session.duration()));
+            double tick = Math.round(this.timeline.tickAt(event.x(), this.session.duration()));
+            if (tick != this.dragging.tick && !dragCheckpoint) {
+                project().checkpoint();
+                dragCheckpoint = true;
+            }
+            this.dragging.tick = tick;
             project().sort();
             return true;
         }
@@ -450,7 +478,8 @@ public final class EditorScreen extends Screen {
     private void finishDrag() {
         if (this.dragging.tick != this.dragStart) project().putCameraKey(this.dragging);
         this.dragging = null;
-        project().save();
+        if (dragCheckpoint) project().save();
+        dragCheckpoint = false;
     }
 
     @Override
@@ -462,7 +491,7 @@ public final class EditorScreen extends Screen {
 
     private void restoreEdit(boolean redo) {
         if (redo ? project().redo() : project().undo()) {
-            this.selected = null;
+            selection.clear();
             this.dragging = null;
             this.session.refreshEnvironment();
             updateLabels();
@@ -475,15 +504,37 @@ public final class EditorScreen extends Screen {
             onClose();
             return true;
         }
+        if (this.dragging != null) finishDrag();
+        if (event.isSelectAll()) {
+            selection.addAll(project().keyframes);
+            return true;
+        }
+        if (event.isCopy() || event.isCut()) {
+            if (!selection.isEmpty()) {
+                String payload = CameraKeyClipboard.encode(selection);
+                minecraft.keyboardHandler.setClipboard(payload);
+                if (event.isCut() && payload.equals(minecraft.keyboardHandler.getClipboard())) deleteSelected();
+            }
+            return true;
+        }
+        if (event.isPaste()) {
+            var keys = CameraKeyClipboard.decode(minecraft.keyboardHandler.getClipboard(), session.tick(), session.duration());
+            if (!keys.isEmpty()) {
+                project().pasteCameraKeys(keys);
+                selection.clear();
+                selection.addAll(keys);
+            }
+            return true;
+        }
         if (event.key() == GLFW.GLFW_KEY_DELETE || event.key() == GLFW.GLFW_KEY_BACKSPACE) {
             deleteSelected();
             return true;
         }
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Z) {
+        if ((event.hasControlDown() || event.hasControlDownWithQuirk()) && event.key() == GLFW.GLFW_KEY_Z) {
             restoreEdit(event.hasShiftDown());
             return true;
         }
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Y) {
+        if ((event.hasControlDown() || event.hasControlDownWithQuirk()) && event.key() == GLFW.GLFW_KEY_Y) {
             restoreEdit(true);
             return true;
         }

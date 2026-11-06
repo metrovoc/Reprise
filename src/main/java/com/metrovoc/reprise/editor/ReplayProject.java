@@ -213,6 +213,16 @@ public final class ReplayProject {
         save();
     }
 
+    void pasteCameraKeys(java.util.List<Keyframe> keys) {
+        checkpoint();
+        var times = new java.util.HashSet<Double>();
+        keys.forEach(key -> times.add(key.tick));
+        keyframes.removeIf(key -> times.contains(key.tick));
+        keyframes.addAll(keys);
+        sort();
+        save();
+    }
+
     public void putCameraKey(Keyframe key) {
         this.keyframes.removeIf(existing -> existing == key || existing.tick == key.tick);
         this.keyframes.add(key);

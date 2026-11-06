@@ -108,6 +108,9 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   - *Hold*: stays put, then cuts.
 - Select a camera key and choose **Edit camera key…** to enter exact coordinates, yaw, pitch, roll, field of view,
   or a fractional timeline tick. **Save key** applies the changes as one undoable edit.
+- Shift-click camera keys to select a group. Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
+  or paste. Paste places the earliest copied key at the playhead and preserves the spacing of the others. Keys
+  at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
 - For a moving subject, frame the shot with the free camera, open **Entities**, select the subject and choose eyes,
   center or feet. **Aim keyframe** pans from the camera path to keep that point in frame. **Follow keyframe** also
   carries the camera with the subject. Two **Orbit keyframes** around the same subject and target point move the
