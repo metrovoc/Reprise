@@ -28,6 +28,7 @@ public final class ReplayClip {
             clip.uuid = UUID.randomUUID().toString();
             clip.recordedAt = System.currentTimeMillis();
             clip.durationTicks = end - start;
+            clip.openingTick = Math.clamp(original.openingTick - start, 0, clip.durationTicks);
             clip.markers.removeIf(m -> m.tick < start || m.tick > end);
             clip.markers.forEach(m -> m.tick -= start);
             clip.segments.clear();

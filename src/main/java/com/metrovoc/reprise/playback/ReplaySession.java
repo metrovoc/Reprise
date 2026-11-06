@@ -162,6 +162,14 @@ public final class ReplaySession {
             mc.setScreen(new GenericMessageScreen(Component.translatable("reprise.replay.loading")));
             active.playSnapshot(0);
             active.applyResetsAtCurrentTick();
+            if (active.meta.openingTick > 0) {
+                active.fastForwarding = true;
+                try {
+                    active.advance(Math.min(active.meta.openingTick, active.duration()));
+                } finally {
+                    active.fastForwarding = false;
+                }
+            }
             active.settleEntities();
         } catch (Exception e) {
             Reprise.LOGGER.error("Could not open replay {}", path, e);

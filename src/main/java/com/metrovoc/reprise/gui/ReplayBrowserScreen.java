@@ -156,7 +156,7 @@ public final class ReplayBrowserScreen extends Screen {
     private void chooseImport() {
         try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
             String path = org.lwjgl.util.tinyfd.TinyFileDialogs.tinyfd_openFileDialog(
-                Component.translatable("reprise.browser.import").getString(), "", stack.pointers(stack.UTF8("*.zip")), "Flashback ZIP", false);
+                Component.translatable("reprise.browser.import").getString(), "", stack.pointers(stack.UTF8("*.zip"), stack.UTF8("*.mcpr")), "Flashback ZIP or ReplayMod MCPR", false);
             if (path != null) importRecording(Path.of(path));
         }
     }
@@ -172,7 +172,9 @@ public final class ReplayBrowserScreen extends Screen {
         client.setScreen(progress);
         Thread.startVirtualThread(() -> {
             try {
-                Path imported = com.metrovoc.reprise.format.FlashbackImport.convert(source, ReprisePaths.replays());
+                Path imported = source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".mcpr")
+                    ? com.metrovoc.reprise.format.ReplayModImport.convert(source, ReprisePaths.replays())
+                    : com.metrovoc.reprise.format.FlashbackImport.convert(source, ReprisePaths.replays());
                 client.execute(() -> {
                     if (client.screen == progress) {
                         this.selectOnOpen = imported;

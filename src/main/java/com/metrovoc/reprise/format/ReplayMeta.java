@@ -24,6 +24,8 @@ public final class ReplayMeta {
     public boolean snapshotConnectionType;
     public long recordedAt;
     public int durationTicks;
+    /** First viewable tick for recordings that start during the connection handshake. */
+    public int openingTick;
     public String server = "";
     public boolean singleplayer;
     public String recorderName = "";
