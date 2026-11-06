@@ -15,13 +15,13 @@ public final class RepriseConfig {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         b.translation("reprise.configuration.recording").push("recording");
         AUTO_RECORD_SINGLEPLAYER = b.comment("Start recording when a singleplayer world opens")
-            .translation("reprise.configuration.autoRecordSingleplayer").define("autoRecordSingleplayer", false);
+            .translation("reprise.configuration.autoRecordSingleplayer").define("autoRecordSingleplayer", true);
         AUTO_RECORD_MULTIPLAYER = b.comment("Start recording when joining a server")
-            .translation("reprise.configuration.autoRecordMultiplayer").define("autoRecordMultiplayer", false);
+            .translation("reprise.configuration.autoRecordMultiplayer").define("autoRecordMultiplayer", true);
         SHOW_RECORDING_INDICATOR = b.comment("Show a red dot and the recorded time while recording")
             .translation("reprise.configuration.showIndicator").define("showIndicator", true);
         RECORD_HOTBAR = b.comment("Record your nine hotbar slots, selection, health, food and experience for first-person replay")
-            .translation("reprise.configuration.recordHotbar").define("recordHotbar", false);
+            .translation("reprise.configuration.recordHotbar").define("recordHotbar", true);
         POV_DIVISIONS = b.comment("First-person sample intervals per game tick (1 uses ordinary tick recording)")
             .translation("reprise.configuration.povDivisions").defineInRange("povDivisions", 8, 1, 12);
         b.pop();

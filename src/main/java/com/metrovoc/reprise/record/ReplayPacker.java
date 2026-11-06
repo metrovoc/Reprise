@@ -39,7 +39,7 @@ public final class ReplayPacker {
     }
 
     /** Packs recordings left behind by a crash; returns how many were saved. */
-    public static int recoverAll() {
+    public static synchronized int recoverAll() {
         int count = 0;
         Recorder active = Recorder.active();
         try (Stream<Path> dirs = Files.list(ReprisePaths.recordings())) {

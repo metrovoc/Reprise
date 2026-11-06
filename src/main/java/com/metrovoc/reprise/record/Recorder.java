@@ -60,6 +60,7 @@ public final class Recorder {
     private int segmentTicks;
     private int recordedTicks;
     private ViewMotion previousView, writtenView;
+    private boolean thumbnailTaken;
 
     private Recorder(ClientPacketListener connection) throws IOException {
         int divisions = com.metrovoc.reprise.RepriseConfig.POV_DIVISIONS.get();
@@ -272,6 +273,8 @@ public final class Recorder {
             bytes = PacketCodecs.encode(protocol.codec(), packet);
         } catch (RuntimeException e) {
             Reprise.LOGGER.warn("Could not record payload {}", packet.payload().type().id(), e);
+            String type = packet.payload().type().id().toString();
+            this.writer.submit(w -> w.unrecorded(type));
             return;
         }
         Runnable append = () -> {
@@ -297,6 +300,8 @@ public final class Recorder {
             if (this.failedEncodes++ < 10) {
                 Reprise.LOGGER.warn("Could not record {}", packet.type(), e);
             }
+            String type = packet.type().id().toString();
+            this.writer.submit(w -> w.unrecorded(type));
             return;
         }
         if (packet instanceof ClientboundLevelChunkWithLightPacket) {
@@ -387,9 +392,29 @@ public final class Recorder {
             w.tick();
         });
         this.recordedTicks++;
+        if (!this.thumbnailTaken && this.recordedTicks >= 40 && this.minecraft.screen == null) {
+            this.thumbnailTaken = true;
+            takeThumbnail();
+        }
         if (++this.segmentTicks >= SEGMENT_TICKS) {
             beginSegment(false, samples);
         }
+    }
+
+    /** A small picture for the replay list: the view two seconds in, cropped above the hotbar. */
+    private void takeThumbnail() {
+        Path target = this.writer.dir().resolve("thumb.png");
+        net.minecraft.client.Screenshot.takeScreenshot(this.minecraft.getMainRenderTarget(), image -> {
+            try (image; var thumb = new com.mojang.blaze3d.platform.NativeImage(160, 90, false)) {
+                int cropH = (int) (image.getHeight() * 0.8);
+                int cropW = Math.min(image.getWidth(), cropH * 16 / 9);
+                cropH = cropW * 9 / 16;
+                image.resizeSubRectTo((image.getWidth() - cropW) / 2, 0, cropW, cropH, thumb);
+                if (Files.isDirectory(target.getParent())) thumb.writeToFile(target);
+            } catch (Exception e) {
+                Reprise.LOGGER.debug("No thumbnail for this recording", e);
+            }
+        });
     }
 
     /** Cut between ticks, before any packets for the next tick have been applied. */

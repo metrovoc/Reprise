@@ -24,7 +24,8 @@ public final class RecordingControls {
             }
             Minecraft mc = Minecraft.getInstance();
             boolean auto = mc.isLocalServer() ? RepriseConfig.AUTO_RECORD_SINGLEPLAYER.get() : RepriseConfig.AUTO_RECORD_MULTIPLAYER.get();
-            autoStartDelay = auto ? 20 : -1;
+            // Start right away: the opening snapshot waits until the world has loaded, so nothing is missed.
+            autoStartDelay = auto ? 1 : -1;
         });
         bus.addListener(ClientPlayerNetworkEvent.LoggingOut.class, e -> {
             autoStartDelay = -1;
@@ -75,16 +76,46 @@ public final class RecordingControls {
         }
     }
 
+    private static final net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId TOAST =
+        new net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId(6000L);
+
     private static void stopAndReport() {
-        if (!Recorder.isRecording()) {
+        Recorder recorder = Recorder.active();
+        if (recorder == null) {
             return;
         }
+        int ticks = recorder.recordedTicks();
         Path file = Recorder.stop();
         Minecraft mc = Minecraft.getInstance();
-        if (file != null && mc.player != null) {
-            mc.player.sendSystemMessage(Component.translatable("reprise.recording.saved", file.getFileName().toString()));
+        Component title, message;
+        if (file != null) {
+            int lost = recorder.meta().unrecordedCount();
+            title = Component.translatable("reprise.recording.saved.title", com.metrovoc.reprise.gui.Timecode.format(ticks));
+            message = lost == 0 ? Component.translatable("reprise.recording.saved.message")
+                : Component.translatable("reprise.recording.saved.lost", lost);
+        } else {
+            title = Component.translatable("reprise.recording.failed.title");
+            message = Component.translatable("reprise.recording.failed.message");
         }
+        // A toast, not chat: the player is usually leaving the world when a recording ends.
+        net.minecraft.client.gui.components.toasts.SystemToast.addOrUpdate(mc.getToastManager(), TOAST, title, message);
     }
+
+    /** Packs recordings left behind by a crash, once per game start, off the game thread. */
+    public static void recoverInBackground() {
+        if (recovered) return;
+        recovered = true;
+        Thread.ofVirtual().name("Reprise recovery").start(() -> {
+            int count = ReplayPacker.recoverAll();
+            if (count > 0) {
+                Minecraft mc = Minecraft.getInstance();
+                mc.execute(() -> net.minecraft.client.gui.components.toasts.SystemToast.addOrUpdate(mc.getToastManager(), TOAST,
+                    Component.translatable("reprise.recording.recovered.title", count), Component.translatable("reprise.recording.recovered.message")));
+            }
+        });
+    }
+
+    private static boolean recovered;
 
     private RecordingControls() {}
 }

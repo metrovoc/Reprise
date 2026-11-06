@@ -136,6 +136,11 @@ public final class ReplaySession {
     private ViewMotion recordedView;
 
     private int failedPackets;
+
+    /** Recorded updates that could not be read or applied in this session; shown to the viewer. */
+    public int unreadable() {
+        return this.failedPackets;
+    }
     private UUID spectating;
     private final ReplayProject project;
     public final com.metrovoc.reprise.export.Soundtrack soundtrack = new com.metrovoc.reprise.export.Soundtrack();

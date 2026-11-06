@@ -36,6 +36,12 @@ public final class ReplayMeta {
     public List<Segment> segments = new ArrayList<>();
     public List<Marker> markers = new ArrayList<>();
     public Map<String, String> mods = new LinkedHashMap<>();
+    /** Packets the recorder received but could not store, by packet type. Shown to the player; normally empty. */
+    public Map<String, Integer> unrecorded = new LinkedHashMap<>();
+
+    public int unrecordedCount() {
+        return this.unrecorded == null ? 0 : this.unrecorded.values().stream().mapToInt(Integer::intValue).sum();
+    }
 
     public static final class Segment {
         public String file;

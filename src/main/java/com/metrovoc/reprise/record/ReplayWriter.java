@@ -231,6 +231,19 @@ public final class ReplayWriter {
         action(Actions.TICK, null);
         this.meta.durationTicks++;
         this.currentSegment.ticks++;
+        // A crash loses at most a second: buffered packets reach the disk every 20 ticks.
+        if (this.currentSegment.ticks % 20 == 0) {
+            try {
+                this.segment.flush();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+    }
+
+    void unrecorded(String type) {
+        if (this.meta.unrecorded == null) this.meta.unrecorded = new java.util.LinkedHashMap<>();
+        this.meta.unrecorded.merge(type, 1, Integer::sum);
     }
 
     public int segmentTicks() {
