@@ -156,6 +156,10 @@ follows the replay and the shader frame counter advances once per exported frame
   The camera path sets the forward view. Each frame samples one replay instant and video files carry their
   crop bounds for spherical players. Panoramas capture the world without first-person
   hands or HUD overlays, and the optional stereo soundtrack follows the forward view.
+- **VR stereo** exports an omnidirectional stereo panorama with the left eye above the right. Eye separation
+  follows the viewing direction around a 0.14-block circle. A full 360° frame is square, and cropped shots
+  retain their spherical coverage and stereo layout in the video metadata. This mode uses the built-in terrain
+  renderer and requires Sodium and shader packs to be disabled.
 - **Cube map** exports a 4:3 cross of six square faces. The middle row is left, front, right, back.
   The top and bottom faces sit above and below the front. Each face keeps its original pixels and depth
   along its own viewing axis. With transparent sky enabled, unused tiles are transparent.

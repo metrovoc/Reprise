@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.export;
 
+import com.metrovoc.reprise.editor.ExportSettings.Projection;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -61,9 +62,19 @@ final class SpatialVideoMetadata {
         throw new IOException("Missing " + name + " in video index");
     }
 
-    static void tag(Path file, int width, int height, int fullWidth, boolean stereo) throws IOException {
-        // st3d layout 2 is left-eye-first side-by-side. Flat stereo carries no spherical projection.
-        byte[] metadata = stereo ? box("st3d", new byte[]{0, 0, 0, 0, 2}) : sphere(width, height, fullWidth);
+    static void tag(Path file, int width, int height, int fullWidth, Projection projection) throws IOException {
+        byte[] metadata = switch (projection) {
+            case PANORAMA -> sphere(width, height, fullWidth);
+            case STEREO -> box("st3d", new byte[]{0, 0, 0, 0, 2});
+            case ODS -> {
+                byte[] layout = box("st3d", new byte[]{0, 0, 0, 0, 1});
+                byte[] spherical = sphere(width, height / 2, fullWidth);
+                byte[] both = java.util.Arrays.copyOf(layout, layout.length + spherical.length);
+                System.arraycopy(spherical, 0, both, layout.length, spherical.length);
+                yield both;
+            }
+            default -> throw new IllegalArgumentException("No spatial metadata for " + projection);
+        };
         try (var f = new RandomAccessFile(file.toFile(), "rw")) {
             List<Box> parents = new ArrayList<>();
             var parent = new Box(0, f.length(), 0, "");

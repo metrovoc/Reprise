@@ -37,8 +37,8 @@ final class FfmpegSink implements FrameSink {
                 case PNG_SEQUENCE -> throw new IllegalArgumentException("PNG sequences are written without ffmpeg");
             }
         }
-        if (settings.supportsHardware() && !settings.panorama && !settings.stereo) cmd.addAll(List.of("-movflags", "+faststart"));
-        if ((settings.panorama || settings.stereo) && settings.format == ExportSettings.Format.WEBM_VP9) {
+        if (settings.supportsHardware() && !settings.spherical() && !settings.stereo) cmd.addAll(List.of("-movflags", "+faststart"));
+        if ((settings.spherical() || settings.stereo) && settings.format == ExportSettings.Format.WEBM_VP9) {
             // Stage VP9 in ISO BMFF so FFmpeg can carry the spherical side data into WebM on remux.
             cmd.addAll(List.of("-f", "mp4"));
         }

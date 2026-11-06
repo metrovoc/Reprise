@@ -60,10 +60,11 @@ final class DepthExr {
                 block.clear();
                 for (int y = first; y < Math.min(first + linesPerBlock, height); y++) {
                     raw.position((height - y - 1) * width * Float.BYTES);
+                    int radialRow = radialScale == null ? 0 : ((height - y - 1) * width) % radialScale.length;
                     for (int x = 0; x < width; x++) {
                         float depth = raw.getFloat();
                         double ndc = zeroToOne ? depth : 2.0 * depth - 1.0;
-                        float scale = radialScale == null ? 1 : radialScale[(height - y - 1) * width + x];
+                        float scale = radialScale == null ? 1 : radialScale[radialRow + x];
                         block.putFloat(depth == 1.0f ? Float.POSITIVE_INFINITY : (float) (scale * m32 / (ndc + m22)));
                     }
                 }

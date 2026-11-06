@@ -260,6 +260,8 @@ public final class RepriseSteps {
                     settings.panorama = flags.contains("360");
                     settings.cubeMap = flags.contains("cube");
                     settings.stereo = flags.contains("stereo");
+                    settings.omnidirectionalStereo = flags.contains("ods");
+                    if (settings.omnidirectionalStereo) settings.setProjection(com.metrovoc.reprise.editor.ExportSettings.Projection.ODS);
                     settings.panoramaFov = 360;
                     for (String option : flags) if (option.startsWith("fov=")) settings.panoramaFov = Integer.parseInt(option.substring(4));
                     settings.depthMap = flags.contains("depth");

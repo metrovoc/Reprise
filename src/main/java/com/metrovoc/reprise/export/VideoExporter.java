@@ -76,6 +76,7 @@ public final class VideoExporter {
     private final int renderWidth, renderHeight;
     private final Panorama panorama;
     private final boolean stereo;
+    private final boolean ods;
     private boolean rightEye;
     private Vec3 stereoCenter;
     private static final Panorama.Face[] FACES = Panorama.Face.values();
@@ -101,6 +102,10 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
+        this.ods = settings.projection() == ExportSettings.Projection.ODS;
+        if (ods && (sodium || ShaderPacks.active())) {
+            throw new IllegalStateException(Component.translatable("reprise.export.ods_renderer").getString());
+        }
         this.stereo = settings.projection() == ExportSettings.Projection.STEREO;
         this.withDepth = settings.depthMap && settings.format == ExportSettings.Format.PNG_SEQUENCE;
         this.transparent = settings.transparentSky && settings.supportsAlpha();
@@ -115,12 +120,12 @@ public final class VideoExporter {
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
         this.captureWidth = switch (settings.projection()) {
-            case PANORAMA -> settings.sphereWidth() / 4;
+            case ODS, PANORAMA -> settings.sphereWidth() / 4;
             case CUBE -> width / 4;
             case STEREO -> width / 2;
             case FLAT -> width;
         };
-        this.captureHeight = settings.panorama || settings.cubeMap ? captureWidth : height;
+        this.captureHeight = settings.spherical() || settings.cubeMap ? captureWidth : height;
         if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
             || captureWidth > max / scale || captureHeight > max / scale) {
             throw new IllegalArgumentException(Component.translatable("reprise.export.size_limit", (long) this.width * scale,
@@ -128,7 +133,7 @@ public final class VideoExporter {
         }
         this.renderWidth = captureWidth * scale;
         this.renderHeight = captureHeight * scale;
-        this.panorama = settings.panorama ? new Panorama(width, height, captureWidth, withDepth) : null;
+        this.panorama = settings.spherical() ? new Panorama(width, ods ? height / 2 : height, captureWidth, withDepth) : null;
         this.captureFaces = panorama != null ? panorama.captureFaces : settings.cubeMap ? List.of(FACES) : List.of();
         this.schedule = session.project().frameSchedule(this.start, this.end, settings.fps);
         if (this.schedule.frameCount() > Integer.MAX_VALUE) {
@@ -231,6 +236,9 @@ public final class VideoExporter {
     }
 
     public Panorama.Face panoramaFace() { return captureFaces.isEmpty() ? null : captureFaces.get(faceIndex); }
+
+    public boolean capturingOds() { return ods && captureThisFrame; }
+    public boolean rightEye() { return rightEye; }
 
     public float eyeOffset() { return stereo ? (rightEye ? 0.1f : -0.1f) : 0; }
 
@@ -418,7 +426,7 @@ public final class VideoExporter {
             if (++faceIndex < captureFaces.size()) return;
             faceIndex = 0;
         }
-        if (stereo) {
+        if (stereo || ods) {
             rightEye = !rightEye;
             if (rightEye) return;
         }
@@ -522,6 +530,13 @@ public final class VideoExporter {
         }
     }
 
+    private static byte[] topBottom(byte[] left, byte[] right) {
+        // GPU rows run bottom-up. The left eye occupies the upper half after the output flip.
+        byte[] packed = java.util.Arrays.copyOf(right, Math.addExact(left.length, right.length));
+        System.arraycopy(left, 0, packed, right.length, left.length);
+        return packed;
+    }
+
     private void write() {
         try {
             int written = 0, face = 0;
@@ -554,14 +569,14 @@ public final class VideoExporter {
                     bytes = panorama == null ? Panorama.cross(colors, captureWidth, false) : panorama.project(colors);
                     if (withDepth) depth = panorama == null ? Panorama.cross(depths, captureWidth, true) : panorama.project(depths);
                 }
-                if (stereo) {
+                if (stereo || ods) {
                     if (leftColor == null) {
                         leftColor = bytes;
                         leftDepth = depth;
                         continue;
                     }
-                    bytes = sideBySide(leftColor, bytes, height);
-                    if (depth != null) depth = sideBySide(leftDepth, depth, height);
+                    bytes = ods ? topBottom(leftColor, bytes) : sideBySide(leftColor, bytes, height);
+                    if (depth != null) depth = ods ? topBottom(leftDepth, depth) : sideBySide(leftDepth, depth, height);
                     leftColor = null;
                     leftDepth = null;
                 }
@@ -621,7 +636,7 @@ public final class VideoExporter {
                     this.sink.abort();
                 }
                 if (ok && (panorama != null || stereo) && settings.format == ExportSettings.Format.WEBM_VP9) {
-                    SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, stereo);
+                    SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, settings.projection());
                     if (audio == null) {
                         Path webm = files.work.resolve("spherical.webm");
                         ok = FfmpegSink.run(FfmpegSink.find(settings.ffmpeg), java.util.List.of("-i", files.media.toString(),
@@ -636,7 +651,7 @@ public final class VideoExporter {
                     }
                 }
                 if (ok && (panorama != null || stereo) && settings.format != ExportSettings.Format.PNG_SEQUENCE
-                    && settings.format != ExportSettings.Format.WEBM_VP9) SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, stereo);
+                    && settings.format != ExportSettings.Format.WEBM_VP9) SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, settings.projection());
                 if (ok) output = this.files.publish();
             } else {
                 abortWriter();

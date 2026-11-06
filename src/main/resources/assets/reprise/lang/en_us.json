@@ -184,6 +184,8 @@
   "reprise.interpolation.linear": "Linear",
   "reprise.interpolation.ease": "Ease",
   "reprise.interpolation.hold": "Hold",
+  "reprise.export.ods": "VR stereo",
+  "reprise.export.ods_renderer": "VR stereo requires the built-in terrain renderer. Disable Sodium and shader packs for this export.",
   "reprise.export.cube": "Cube map",
   "reprise.export.stereo": "Stereo 3D",
   "reprise.export.flat": "Flat",

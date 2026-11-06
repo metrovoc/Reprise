@@ -24,6 +24,8 @@
     "export.DeltaTrackerTimerMixin",
     "export.WindowMixin",
     "export.PanoramaCameraMixin",
+    "export.OdsPipelineMixin",
+    "export.OdsShaderMixin",
     "export.IrisTimerMixin",
     "export.IrisFrameCounterMixin",
     "export.GameRendererMixin",

@@ -63,13 +63,13 @@ public final class ExportScreen extends Screen {
         });
         var resolution = cycle(x, y + 24, w - 68, this::resolutionLabel, () -> {
             var sizes = switch (settings.projection()) {
-                case PANORAMA, CUBE -> PANORAMAS;
+                case ODS, PANORAMA, CUBE -> PANORAMAS;
                 case STEREO -> STEREO_RESOLUTIONS;
                 case FLAT -> RESOLUTIONS;
             };
             int i = 0;
             for (int j = 0; j < sizes.length; j++) {
-                if (sizes[j][0] == this.settings.width && (settings.panorama || settings.cubeMap || sizes[j][1] == this.settings.height)) {
+                if (sizes[j][0] == this.settings.width && (settings.spherical() || settings.cubeMap || sizes[j][1] == this.settings.height)) {
                     i = j + 1;
                 }
             }
@@ -111,7 +111,7 @@ public final class ExportScreen extends Screen {
         this.depthButton = cycle(x + 117, y + 120, w - 117,
             this::depthLabel, () -> this.settings.depthMap = !this.settings.depthMap);
         this.depthButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.depth.tooltip")));
-        if (settings.panorama) {
+        if (settings.spherical()) {
             addRenderableWidget(new AbstractSliderButton(x + w - 64, y + 24, 64, 20, angleLabel(), (settings.panoramaFov - 120) / 240.0) {
                 @Override protected void applyValue() {
                     int fov = 120 + (int) Math.round(value * 48) * 5;

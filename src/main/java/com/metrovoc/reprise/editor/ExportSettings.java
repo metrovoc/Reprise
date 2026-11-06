@@ -2,7 +2,7 @@ package com.metrovoc.reprise.editor;
 
 public final class ExportSettings {
     public enum Projection {
-        FLAT("flat"), PANORAMA("panorama"), STEREO("stereo"), CUBE("cube");
+        FLAT("flat"), PANORAMA("panorama"), STEREO("stereo"), CUBE("cube"), ODS("ods");
 
         public final String labelKey;
         Projection(String name) { labelKey = "reprise.export." + name; }
@@ -39,6 +39,7 @@ public final class ExportSettings {
     public boolean panorama;
     public boolean stereo;
     public boolean cubeMap;
+    public boolean omnidirectionalStereo;
     public int panoramaFov = 360;
 
     public boolean hardwareEncoder;
@@ -46,6 +47,7 @@ public final class ExportSettings {
 
     /** Keep the flags used in saved projects and queued shots from earlier releases. */
     public Projection projection() {
+        if (omnidirectionalStereo) return Projection.ODS;
         if (cubeMap) return Projection.CUBE;
         if (panorama) return Projection.PANORAMA;
         if (stereo) return Projection.STEREO;
@@ -54,8 +56,13 @@ public final class ExportSettings {
 
     public void setProjection(Projection projection) {
         cubeMap = projection == Projection.CUBE;
+        omnidirectionalStereo = projection == Projection.ODS;
         panorama = projection == Projection.PANORAMA;
         stereo = projection == Projection.STEREO;
+    }
+
+    public boolean spherical() {
+        return panorama || omnidirectionalStereo;
     }
 
     /** Full sphere width at the requested vertical resolution, with square cube faces. */
@@ -67,13 +74,14 @@ public final class ExportSettings {
 
     public int outputWidth() {
         if (cubeMap) return width & ~7;
-        if (!panorama) return width & ~1;
+        if (!spherical()) return width & ~1;
         double crop = sphereWidth() * (Math.clamp(panoramaFov, 120, 360) / 360.0);
         return Math.toIntExact(2 * Math.round(crop / 2));
     }
 
     public int outputHeight() {
         if (cubeMap) return outputWidth() / 4 * 3;
+        if (omnidirectionalStereo) return width & ~3;
         return panorama ? (width & ~3) / 2 : height & ~1;
     }
 
