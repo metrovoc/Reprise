@@ -35,6 +35,7 @@ public final class VideoExporter {
 
     private final Minecraft mc = Minecraft.getInstance();
     private final ReplaySession session;
+    private final boolean sodium = net.neoforged.fml.ModList.get().isLoaded("sodium");
     private final ExportSettings settings;
     private final int start, end, width, height;
     private final double[] frameTicks;
@@ -77,6 +78,9 @@ public final class VideoExporter {
         this.height = settings.height & ~1;
         this.frameTicks = session.project().frameTicks(this.start, this.end, settings.fps);
         this.totalFrames = this.frameTicks.length;
+        if (this.totalFrames == 0) {
+            throw new IllegalArgumentException("The export range contains no frames");
+        }
 
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         String base = session.file().path().getFileName().toString().replaceFirst("\\.reprise$", "") + "_" + stamp;
@@ -141,6 +145,7 @@ public final class VideoExporter {
         CameraPath.setForced(true);
         exporter.mc.setScreen(new ExportProgressScreen(exporter));
         exporter.mc.resizeGui();
+        FlawlessFrames.setEnabled(true);
         Reprise.LOGGER.info("Exporting ticks {}..{} as {} frames at {}x{} to {}", exporter.start, exporter.end, exporter.totalFrames,
             exporter.width, exporter.height, exporter.output);
     }
@@ -155,6 +160,15 @@ public final class VideoExporter {
 
     public int frame() {
         return this.frame;
+    }
+
+    public float shaderTimeSeconds() {
+        double tick = this.frameTicks[Math.min(this.frame, this.totalFrames - 1)];
+        return (float) ((tick / 20.0) % 3600.0);
+    }
+
+    public float frameDurationSeconds() {
+        return 1.0f / this.settings.fps;
     }
 
     public int totalFrames() {
@@ -213,6 +227,10 @@ public final class VideoExporter {
     /** True once every section in view is built and uploaded, so the frame shows the whole world. */
     private boolean worldReady() {
         var renderer = this.mc.levelRenderer;
+        if (this.sodium) {
+            // Sodium owns the terrain queues and implements this query against its chunk builder.
+            return renderer.hasRenderedAllSections();
+        }
         var dispatcher = renderer.getSectionRenderDispatcher();
         if (dispatcher == null) {
             return true;
@@ -326,6 +344,7 @@ public final class VideoExporter {
             return;
         }
         this.finished = true;
+        FlawlessFrames.setEnabled(false);
         // Pending GPU readbacks complete on the render thread; give them a few frames.
         for (int i = 0; i < 50 && this.pendingReadbacks > 0; i++) {
             RenderSystem.executePendingTasks();

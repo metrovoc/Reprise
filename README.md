@@ -66,7 +66,8 @@ Keyframes and settings are saved with each replay, in `reprise/projects/`.
 
 *Export* in the editor renders the selected range to `reprise/exports/`. Frames are rendered at a fixed time step,
 so the video is smooth however fast your computer is. The GUI is left out, and the export waits for every chunk in view
-to finish building.
+to finish building. With Sodium, Reprise requests synchronous terrain rendering during export. With Iris, shader time
+follows the replay and the shader frame counter advances once per exported frame.
 
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
 - Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.

@@ -11,6 +11,9 @@ description='''
 Record your Minecraft sessions and replay them from any angle: scrub and rewind instantly, animate cameras with keyframes, and export cinematic video.
 '''
 
+[modproperties.${mod_id}]
+"frex:flawless_frames_handler" = "com.metrovoc.reprise.export.FlawlessFrames"
+
 [[mixins]]
 config="${mod_id}.mixins.json"
 
