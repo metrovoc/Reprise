@@ -16,7 +16,7 @@ public abstract class WindowMixin {
     @ModifyExpressionValue(method = "calculateScale", at = @At(value = "FIELD", target = "Lcom/mojang/blaze3d/platform/Window;framebufferWidth:I"))
     private int reprise$layoutWidth(int original) {
         var job = VideoExporter.running();
-        return job != null && job.includesHud() ? job.outputWidth() : original;
+        return job != null && job.includesHud() ? job.hudWidth() : original;
     }
 
     @ModifyExpressionValue(method = "calculateScale", at = @At(value = "FIELD", target = "Lcom/mojang/blaze3d/platform/Window;framebufferHeight:I"))
@@ -28,7 +28,7 @@ public abstract class WindowMixin {
     @ModifyReturnValue(method = "calculateScale", at = @At("RETURN"))
     private int reprise$scaleHud(int original) {
         var job = VideoExporter.running();
-        return job != null && job.includesHud() ? original * (job.renderWidth() / job.outputWidth()) : original;
+        return job != null && job.includesHud() ? original * (job.renderWidth() / job.hudWidth()) : original;
     }
 
     @ModifyExpressionValue(method = "setGuiScale", at = @At(value = "FIELD", target = "Lcom/mojang/blaze3d/platform/Window;framebufferWidth:I"))

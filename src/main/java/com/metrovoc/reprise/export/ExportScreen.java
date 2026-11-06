@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Component;
 /** Export settings: format, resolution, frame rate and quality. */
 public final class ExportScreen extends Screen {
     private static final int[][] RESOLUTIONS = {{1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}, {1080, 1920}, {1080, 1080}};
+    private static final int[][] STEREO_RESOLUTIONS = {{1920, 1080}, {2560, 720}, {3840, 1080}, {5120, 1440}, {7680, 2160}};
     private static final int[][] PANORAMAS = {{1024, 512}, {2048, 1024}, {4096, 2048}, {6144, 3072}, {8192, 4096}};
     private static final int[] FRAME_RATES = {24, 30, 60, 120};
     private static final int[] QUALITIES = {12, 16, 18, 23, 28};
@@ -55,12 +56,14 @@ public final class ExportScreen extends Screen {
             updateEncoder();
             updatePasses();
         });
-        cycle(x + w - 72, y, 72, () -> Component.translatable(settings.panorama ? "reprise.export.panorama" : "reprise.export.flat"), () -> {
-            settings.panorama = !settings.panorama;
+        cycle(x + w - 72, y, 72, () -> Component.translatable(settings.panorama ? "reprise.export.panorama" : settings.stereo ? "reprise.export.stereo" : "reprise.export.flat"), () -> {
+            boolean flat = !settings.panorama && !settings.stereo;
+            settings.stereo = settings.panorama;
+            settings.panorama = flat;
             rebuildWidgets();
         });
         var resolution = cycle(x, y + 24, w - 68, this::resolutionLabel, () -> {
-            var sizes = settings.panorama ? PANORAMAS : RESOLUTIONS;
+            var sizes = settings.panorama ? PANORAMAS : settings.stereo ? STEREO_RESOLUTIONS : RESOLUTIONS;
             int i = 0;
             for (int j = 0; j < sizes.length; j++) {
                 if (sizes[j][0] == this.settings.width && (settings.panorama || sizes[j][1] == this.settings.height)) {

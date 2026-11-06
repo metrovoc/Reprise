@@ -151,6 +151,10 @@ follows the replay and the shader frame counter advances once per exported frame
   The camera path sets the forward view. Each frame samples one replay instant and video files carry their
   crop bounds for spherical players. Panoramas capture the world without first-person
   hands or HUD overlays, and the optional stereo soundtrack follows the forward view.
+- Select **Stereo 3D** for a side-by-side perspective shot. Each eye occupies half the output width, with
+  the left eye first. Choose 3840×1080 for two 1920×1080 views. The eyes render the same replay instant
+  from positions 0.2 blocks apart, and the soundtrack is recorded from their midpoint. Video files carry
+  a left-right stereo layout tag. PNG sequences can include a matching side-by-side EXR depth pass.
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
 - H.264 and H.265 support CPU encoding with constant quality, or GPU encoding with a target bitrate.
   Reprise tests the chosen resolution and frame rate before starting a GPU export. It checks VideoToolbox on

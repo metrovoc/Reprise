@@ -8,8 +8,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Adds Spherical Video V2 to the first (video) sample entry in our staged FFmpeg output. */
-final class SphericalMetadata {
+/** Adds stereo layout or spherical projection metadata to the first (video) sample entry in our staged FFmpeg output. */
+final class SpatialVideoMetadata {
     private static byte[] box(String type, byte[]... fields) {
         int size = 8;
         for (byte[] field : fields) size += field.length;
@@ -61,8 +61,9 @@ final class SphericalMetadata {
         throw new IOException("Missing " + name + " in video index");
     }
 
-    static void tag(Path file, int width, int height, int fullWidth) throws IOException {
-        byte[] metadata = sphere(width, height, fullWidth);
+    static void tag(Path file, int width, int height, int fullWidth, boolean stereo) throws IOException {
+        // st3d layout 2 is left-eye-first side-by-side. Flat stereo carries no spherical projection.
+        byte[] metadata = stereo ? box("st3d", new byte[]{0, 0, 0, 0, 2}) : sphere(width, height, fullWidth);
         try (var f = new RandomAccessFile(file.toFile(), "rw")) {
             List<Box> parents = new ArrayList<>();
             var parent = new Box(0, f.length(), 0, "");
@@ -106,5 +107,5 @@ final class SphericalMetadata {
         }
     }
 
-    private SphericalMetadata() {}
+    private SpatialVideoMetadata() {}
 }

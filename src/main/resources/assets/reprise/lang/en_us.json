@@ -169,6 +169,7 @@
   "reprise.interpolation.linear": "Linear",
   "reprise.interpolation.ease": "Ease",
   "reprise.interpolation.hold": "Hold",
+  "reprise.export.stereo": "Stereo 3D",
   "reprise.export.flat": "Flat",
   "reprise.export.coverage": "%s° FOV",
   "reprise.export.coverage.tooltip": "Horizontal panorama coverage. The crop is centered on the camera’s forward view.",

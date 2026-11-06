@@ -29,9 +29,10 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.resources.server.ServerPackManager.ActivationStatus;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.phys.Vec3;
 
 /**
- * Renders the replay to video at a fixed time step. Every frame the client renders during export is one video frame:
+ * Renders the replay at a fixed time step. All views and compositing passes for one output frame share its clock:
  * the game timer is told to run exactly the ticks that bring the replay to that frame's moment, with the matching
  * partial tick, so the result does not depend on how fast the computer is. Frames are read back from the GPU and
  * handed to a writer thread that feeds ffmpeg.
@@ -73,6 +74,9 @@ public final class VideoExporter {
     private int pendingReadbacks;
     private final int renderWidth, renderHeight;
     private final Panorama panorama;
+    private final boolean stereo;
+    private boolean rightEye;
+    private Vec3 stereoCenter;
     private static final Panorama.Face[] FACES = Panorama.Face.values();
     private int faceIndex;
     private final int captureWidth, captureHeight;
@@ -95,6 +99,7 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
+        this.stereo = settings.stereo && !settings.panorama;
         this.withDepth = settings.depthMap && settings.format == ExportSettings.Format.PNG_SEQUENCE;
         this.transparent = settings.transparentSky && settings.supportsAlpha();
         if (this.transparent && ShaderPacks.active()) {
@@ -107,7 +112,7 @@ public final class VideoExporter {
         this.height = settings.outputHeight();
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
-        this.captureWidth = settings.panorama ? settings.sphereWidth() / 4 : width;
+        this.captureWidth = settings.panorama ? settings.sphereWidth() / 4 : stereo ? width / 2 : width;
         this.captureHeight = settings.panorama ? captureWidth : height;
         if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
             || captureWidth > max / scale || captureHeight > max / scale) {
@@ -219,6 +224,11 @@ public final class VideoExporter {
 
     public Panorama.Face panoramaFace() { return panorama == null ? null : panorama.captureFaces.get(faceIndex); }
 
+    public float eyeOffset() { return stereo ? (rightEye ? 0.1f : -0.1f) : 0; }
+
+    public void setStereoCenter(Vec3 center) { stereoCenter = center; }
+    public Vec3 stereoCenter() { return stereoCenter; }
+
     public boolean includesHud() {
         return panorama == null && !this.settings.hideHud;
     }
@@ -228,6 +238,7 @@ public final class VideoExporter {
     }
 
     public int outputWidth() { return this.width; }
+    public int hudWidth() { return stereo ? captureWidth : outputWidth(); }
     public int outputHeight() { return this.height; }
 
     public int renderWidth() {
@@ -396,9 +407,13 @@ public final class VideoExporter {
             if (++faceIndex < panorama.captureFaces.size()) return;
             faceIndex = 0;
         }
+        if (stereo) {
+            rightEye = !rightEye;
+            if (rightEye) return;
+        }
         if (this.audio != null) {
             try {
-                if (panorama != null) mc.getSoundManager().updateSource(mc.gameRenderer.getMainCamera());
+                if (panorama != null || stereo) mc.getSoundManager().updateSource(mc.gameRenderer.getMainCamera());
                 this.audio.frame();
             } catch (java.io.IOException e) {
                 this.writeError = e;
@@ -499,6 +514,7 @@ public final class VideoExporter {
     private void write() {
         try {
             int written = 0, face = 0;
+            byte[] leftColor = null, leftDepth = null;
             byte[][] colors = panorama == null ? null : new byte[FACES.length][];
             byte[][] depths = panorama == null || !withDepth ? null : new byte[FACES.length][];
             while (true) {
@@ -527,6 +543,17 @@ public final class VideoExporter {
                     bytes = panorama.project(colors);
                     if (withDepth) depth = panorama.project(depths);
                 }
+                if (stereo) {
+                    if (leftColor == null) {
+                        leftColor = bytes;
+                        leftDepth = depth;
+                        continue;
+                    }
+                    bytes = sideBySide(leftColor, bytes, height);
+                    if (depth != null) depth = sideBySide(leftDepth, depth, height);
+                    leftColor = null;
+                    leftDepth = null;
+                }
                 if (depth != null) {
                     DepthExr.write(files.media.resolve(String.format("frame_%06d.depth.exr", written)), width, height, depth,
                         captured.m22, captured.m32, zeroToOne, panorama == null ? null : panorama.radialScale());
@@ -542,6 +569,16 @@ public final class VideoExporter {
         } finally {
             this.writerDone = true;
         }
+    }
+
+    private static byte[] sideBySide(byte[] left, byte[] right, int height) {
+        int row = left.length / height;
+        byte[] pair = new byte[Math.multiplyExact(2, left.length)];
+        for (int y = 0; y < height; y++) {
+            System.arraycopy(left, y * row, pair, y * 2 * row, row);
+            System.arraycopy(right, y * row, pair, (y * 2 + 1) * row, row);
+        }
+        return pair;
     }
 
     public void cancel() {
@@ -572,8 +609,8 @@ public final class VideoExporter {
                 if (!ok) {
                     this.sink.abort();
                 }
-                if (ok && panorama != null && settings.format == ExportSettings.Format.WEBM_VP9) {
-                    SphericalMetadata.tag(files.media, width, height, captureWidth * 4);
+                if (ok && (panorama != null || stereo) && settings.format == ExportSettings.Format.WEBM_VP9) {
+                    SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, stereo);
                     if (audio == null) {
                         Path webm = files.work.resolve("spherical.webm");
                         ok = FfmpegSink.run(FfmpegSink.find(settings.ffmpeg), java.util.List.of("-i", files.media.toString(),
@@ -587,8 +624,8 @@ public final class VideoExporter {
                         failure = Component.translatable("reprise.export.audio_failed");
                     }
                 }
-                if (ok && panorama != null && settings.format != ExportSettings.Format.PNG_SEQUENCE
-                    && settings.format != ExportSettings.Format.WEBM_VP9) SphericalMetadata.tag(files.media, width, height, captureWidth * 4);
+                if (ok && (panorama != null || stereo) && settings.format != ExportSettings.Format.PNG_SEQUENCE
+                    && settings.format != ExportSettings.Format.WEBM_VP9) SpatialVideoMetadata.tag(files.media, width, height, captureWidth * 4, stereo);
                 if (ok) output = this.files.publish();
             } else {
                 abortWriter();

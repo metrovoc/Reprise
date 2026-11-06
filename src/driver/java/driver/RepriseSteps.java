@@ -253,14 +253,16 @@ public final class RepriseSteps {
                     settings.height = Integer.parseInt(a[2]);
                     settings.fps = Integer.parseInt(a[3]);
                     settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
-                    settings.hardwareEncoder = java.util.Arrays.asList(a).contains("gpu");
-                    settings.audio = java.util.Arrays.asList(a).contains("audio");
-                    settings.supersample = java.util.Arrays.asList(a).contains("ssaa");
-                    settings.panorama = java.util.Arrays.asList(a).contains("360");
+                    var flags = java.util.Arrays.asList(a).subList(Math.min(5, a.length), a.length);
+                    settings.hardwareEncoder = flags.contains("gpu");
+                    settings.audio = flags.contains("audio");
+                    settings.supersample = flags.contains("ssaa");
+                    settings.panorama = flags.contains("360");
+                    settings.stereo = flags.contains("stereo");
                     settings.panoramaFov = 360;
-                    for (String option : a) if (option.startsWith("fov=")) settings.panoramaFov = Integer.parseInt(option.substring(4));
-                    settings.depthMap = java.util.Arrays.asList(a).contains("depth");
-                    settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");
+                    for (String option : flags) if (option.startsWith("fov=")) settings.panoramaFov = Integer.parseInt(option.substring(4));
+                    settings.depthMap = flags.contains("depth");
+                    settings.transparentSky = flags.contains("alpha");
                     if (a[0].equals("export")) com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
                 }
                 case "clear" -> {

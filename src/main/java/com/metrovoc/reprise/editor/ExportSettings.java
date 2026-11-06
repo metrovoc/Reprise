@@ -30,6 +30,7 @@ public final class ExportSettings {
     public boolean supersample;
     public boolean depthMap;
     public boolean panorama;
+    public boolean stereo;
     public int panoramaFov = 360;
 
     public boolean hardwareEncoder;
