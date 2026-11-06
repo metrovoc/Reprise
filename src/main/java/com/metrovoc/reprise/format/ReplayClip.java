@@ -104,7 +104,7 @@ public final class ReplayClip {
                     out.writeByte(action);
                     Varints.write(out, mapped);
                 }
-                case Actions.CONFIG_PACKET, Actions.GAME_PACKET -> {
+                case Actions.CONFIG_PACKET, Actions.GAME_PACKET, Actions.POV_SAMPLES -> {
                     int size = Varints.read(data);
                     if (size < 0 || size > data.remaining()) throw new IOException("Truncated packet in " + original.file);
                     out.writeByte(action);

@@ -88,7 +88,7 @@ public final class ReplayPacker {
                         case Actions.TICK -> ticks++;
                         case Actions.SNAPSHOT_TICK -> { }
                         case Actions.SNAPSHOT_END -> actionsOffset = buf.position();
-                        case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
+                        case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES -> {
                             int len = Varints.read(buf);
                             if (len > buf.remaining()) {
                                 throw new java.nio.BufferUnderflowException();

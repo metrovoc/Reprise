@@ -12,6 +12,8 @@
     "record.ClientLevelMixin",
     "record.ChatComponentMixin",
     "playback.MinecraftMixin",
+    "playback.PovCameraMixin",
+    "playback.PovHeadMixin",
     "playback.ReplayClockMixin",
     "playback.ReplayWeatherMixin",
     "playback.PrecipitationMixin",

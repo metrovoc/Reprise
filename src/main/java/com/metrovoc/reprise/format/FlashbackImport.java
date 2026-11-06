@@ -173,7 +173,7 @@ public final class FlashbackImport {
         zip.putNextEntry(new ZipEntry(file));
         var out = new DataOutputStream(new BufferedOutputStream(zip));
         out.writeInt(Actions.MAGIC);
-        out.writeInt(Actions.VERSION);
+        out.writeInt(java.util.Arrays.asList(actions).contains(Kind.POV) ? Actions.POV_SAMPLES_VERSION : Actions.VERSION);
         playerId = -1;
         while (progress.getCount() < snapshotEnd) translate(input, progress, snapshotEnd, actions, out, true);
         if (playerId == -1) throw new IOException("Snapshot has no login packet");
@@ -189,7 +189,7 @@ public final class FlashbackImport {
     }
 
     private enum Kind {
-        TICK, CONFIG, GAME, CHUNK, SPAWN, MOVE, OPTIONAL;
+        TICK, CONFIG, GAME, CHUNK, SPAWN, MOVE, POV, OPTIONAL;
 
         static Kind from(String name) throws IOException {
             return switch (name) {
@@ -198,6 +198,7 @@ public final class FlashbackImport {
                 case "flashback:action/game_packet" -> GAME;
                 case "flashback:action/level_chunk_cached" -> CHUNK;
                 case "flashback:action/create_local_player" -> SPAWN;
+                case "flashback:action/accurate_player_position_optional" -> POV;
                 case "flashback:action/move_entities" -> MOVE;
                 default -> {
                     if (!name.endsWith("optional")) throw new IOException("Unsupported Flashback action: " + name);
@@ -231,6 +232,12 @@ public final class FlashbackImport {
             case CONFIG -> {
                 if (!snapshot) throw new IOException("Mid-segment configuration is unsupported.");
                 write(out, Actions.CONFIG_PACKET, data);
+            }
+            case POV -> {
+                new PovSamples(data.duplicate()); // Check the wire count before publishing the recording.
+                out.writeByte(Actions.POV_SAMPLES);
+                Varints.write(out, size);
+                out.write(payload);
             }
             case GAME -> game(data, out);
             case CHUNK -> {

@@ -10,6 +10,7 @@ import com.metrovoc.reprise.format.Actions;
 import com.metrovoc.reprise.format.EmbeddedPacks;
 import com.metrovoc.reprise.format.ReplayFile;
 import com.metrovoc.reprise.format.ReplayMeta;
+import com.metrovoc.reprise.format.PovSamples;
 import com.metrovoc.reprise.record.PacketCodecs;
 import com.metrovoc.reprise.util.Varints;
 import com.mojang.authlib.GameProfile;
@@ -125,6 +126,8 @@ public final class ReplaySession {
     private boolean usedEmbeddedPacks;
     private final Set<UUID> embeddedPackIds = new HashSet<>();
     private final List<ClientboundResourcePackPushPacket> snapshotPacks = new ArrayList<>();
+    private Map<Integer, PovSamples> pov = new java.util.HashMap<>(), pendingPov = new java.util.HashMap<>();
+
     private int failedPackets;
     private UUID spectating;
     private final ReplayProject project;
@@ -493,11 +496,13 @@ public final class ReplaySession {
                     // Chunk lighting is normally applied between frames. During a seek, later
                     // block changes must see the light data already delivered for that terrain.
                     if (this.fastForwarding) processFoldedTick();
+                    advancePov();
                     this.tick++;
                     applyResetsAtCurrentTick();
                     return;
                 }
                 case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
+                case Actions.POV_SAMPLES -> readPov();
                 case Actions.CHUNK_REF -> deliverChunk(Varints.read(this.reader));
                 case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                 case Actions.SNAPSHOT_END -> { }
@@ -563,7 +568,7 @@ public final class ReplaySession {
                 }
                 case Actions.SNAPSHOT_END -> snapshot = false;
                 case Actions.SNAPSHOT_TICK -> { }
-                case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES -> {
                     int length = Varints.read(buf);
                     byte[] bytes = new byte[length];
                     buf.get(bytes);
@@ -584,6 +589,32 @@ public final class ReplaySession {
         }
     }
 
+    private void readPov() {
+        var sample = new PovSamples(ByteBuffer.wrap(readBytes()));
+        pendingPov.put(sample.entityId, sample);
+    }
+
+    private void advancePov() {
+        var old = pov;
+        pov = pendingPov;
+        pendingPov = old;
+        pendingPov.clear();
+    }
+
+    public PovSamples.Pose povAt(int entityId, float fraction) {
+        if (pov.isEmpty()) return null;
+        var samples = pov.get(entityId);
+        if (samples == null) return null;
+        if (!project().freezes.isEmpty()) {
+            var export = com.metrovoc.reprise.export.VideoExporter.running();
+            double shot = export == null ? visualTick(fraction) : export.shotTick();
+            fraction = (float) (project().worldTick(shot) - this.tick + 1);
+        } else if (!playing) {
+            fraction = 1;
+        }
+        return samples.at(fraction);
+    }
+
     // Snapshots.
 
     /** Rebuilds the client's state from segment {@code index}'s snapshot. */
@@ -596,6 +627,8 @@ public final class ReplaySession {
         }
         this.segment = index;
         this.reader = buf;
+        pov.clear();
+        pendingPov.clear();
         this.tick = this.meta.segments.get(index).startTick;
 
         List<byte[]> config = new ArrayList<>();
@@ -626,14 +659,17 @@ public final class ReplaySession {
             while (buf.hasRemaining()) {
                 int action = buf.get();
                 if (action == Actions.SNAPSHOT_END) {
+                    if (!pendingPov.isEmpty()) advancePov();
                     break;
                 }
                 switch (action) {
                     case Actions.SNAPSHOT_TICK -> {
+                        advancePov();
                         processFoldedTick();
                         beforeFirstBoundary = false;
                     }
                     case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()), -1, beforeFirstBoundary);
+                    case Actions.POV_SAMPLES -> readPov();
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
                     case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                     default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");

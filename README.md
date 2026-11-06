@@ -36,7 +36,10 @@ archive that you can seek, edit, clip, and export.
 **Flashback ZIP.** The importer reads same-version Minecraft 26.1.2 game
 packets, terrain, recorder and entity movement, snapshot boundaries, and markers. Modded packets still
 require compatible client mods and registries. Mid-segment connection reconfiguration is unsupported.
-Flashback editor projects, optional sub-tick camera samples, and wall-clock timing are outside the import.
+When a recording includes extra first-person samples, spectating the recorder reproduces movement and turns
+between ticks during playback and export. The recorder’s head also follows those turns when viewed from
+another camera. Reimport the original ZIP to recover samples from an older import. Segments that declare
+this action use format 4. Flashback editor projects and wall-clock timing are outside the import.
 
 **ReplayMod MCPR.** Minecraft 26.1.2 format 14 recordings import directly. For Minecraft 1.21 and
 1.21.1 recordings (protocol 767), put `replaymod-26.1-2.6.28.jar` in the game directory’s
