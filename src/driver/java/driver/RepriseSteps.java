@@ -258,6 +258,7 @@ public final class RepriseSteps {
                     settings.audio = flags.contains("audio");
                     settings.supersample = flags.contains("ssaa");
                     settings.panorama = flags.contains("360");
+                    settings.cubeMap = flags.contains("cube");
                     settings.stereo = flags.contains("stereo");
                     settings.panoramaFov = 360;
                     for (String option : flags) if (option.startsWith("fov=")) settings.panoramaFov = Integer.parseInt(option.substring(4));

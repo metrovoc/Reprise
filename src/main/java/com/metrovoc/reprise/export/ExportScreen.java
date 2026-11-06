@@ -56,17 +56,20 @@ public final class ExportScreen extends Screen {
             updateEncoder();
             updatePasses();
         });
-        cycle(x + w - 72, y, 72, () -> Component.translatable(settings.panorama ? "reprise.export.panorama" : settings.stereo ? "reprise.export.stereo" : "reprise.export.flat"), () -> {
-            boolean flat = !settings.panorama && !settings.stereo;
-            settings.stereo = settings.panorama;
-            settings.panorama = flat;
+        cycle(x + w - 72, y, 72, () -> Component.translatable(settings.projection().labelKey), () -> {
+            var modes = ExportSettings.Projection.values();
+            settings.setProjection(modes[(settings.projection().ordinal() + 1) % modes.length]);
             rebuildWidgets();
         });
         var resolution = cycle(x, y + 24, w - 68, this::resolutionLabel, () -> {
-            var sizes = settings.panorama ? PANORAMAS : settings.stereo ? STEREO_RESOLUTIONS : RESOLUTIONS;
+            var sizes = switch (settings.projection()) {
+                case PANORAMA, CUBE -> PANORAMAS;
+                case STEREO -> STEREO_RESOLUTIONS;
+                case FLAT -> RESOLUTIONS;
+            };
             int i = 0;
             for (int j = 0; j < sizes.length; j++) {
-                if (sizes[j][0] == this.settings.width && (settings.panorama || sizes[j][1] == this.settings.height)) {
+                if (sizes[j][0] == this.settings.width && (settings.panorama || settings.cubeMap || sizes[j][1] == this.settings.height)) {
                     i = j + 1;
                 }
             }
@@ -133,7 +136,7 @@ public final class ExportScreen extends Screen {
             }).setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.coverage.tooltip")));
         } else {
             var hud = cycle(x + w - 64, y + 24, 64,
-                () -> Component.translatable(!this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
+                () -> Component.translatable(settings.cubeMap ? "reprise.export.hud.off" : !this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
                 () -> {
                     if (!this.settings.hideHud) {
                         this.settings.hideHud = true;
@@ -144,6 +147,7 @@ public final class ExportScreen extends Screen {
                         this.settings.hideHud = false;
                     }
                 });
+            hud.active = !settings.cubeMap;
             hud.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
         }
         updatePasses();

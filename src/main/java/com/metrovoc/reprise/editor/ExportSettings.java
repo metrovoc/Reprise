@@ -1,6 +1,13 @@
 package com.metrovoc.reprise.editor;
 
 public final class ExportSettings {
+    public enum Projection {
+        FLAT("flat"), PANORAMA("panorama"), STEREO("stereo"), CUBE("cube");
+
+        public final String labelKey;
+        Projection(String name) { labelKey = "reprise.export." + name; }
+    }
+
     public enum Format {
         MP4_H264("mp4", "H.264 MP4"),
         MP4_H265("mp4", "H.265 MP4"),
@@ -31,10 +38,25 @@ public final class ExportSettings {
     public boolean depthMap;
     public boolean panorama;
     public boolean stereo;
+    public boolean cubeMap;
     public int panoramaFov = 360;
 
     public boolean hardwareEncoder;
     public int bitrateMbps = 20;
+
+    /** Keep the flags used in saved projects and queued shots from earlier releases. */
+    public Projection projection() {
+        if (cubeMap) return Projection.CUBE;
+        if (panorama) return Projection.PANORAMA;
+        if (stereo) return Projection.STEREO;
+        return Projection.FLAT;
+    }
+
+    public void setProjection(Projection projection) {
+        cubeMap = projection == Projection.CUBE;
+        panorama = projection == Projection.PANORAMA;
+        stereo = projection == Projection.STEREO;
+    }
 
     /** Full sphere width at the requested vertical resolution, with square cube faces. */
     public int sphereWidth() {
@@ -44,12 +66,14 @@ public final class ExportSettings {
     }
 
     public int outputWidth() {
+        if (cubeMap) return width & ~7;
         if (!panorama) return width & ~1;
         double crop = sphereWidth() * (Math.clamp(panoramaFov, 120, 360) / 360.0);
         return Math.toIntExact(2 * Math.round(crop / 2));
     }
 
     public int outputHeight() {
+        if (cubeMap) return outputWidth() / 4 * 3;
         return panorama ? (width & ~3) / 2 : height & ~1;
     }
 

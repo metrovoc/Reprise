@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -78,6 +79,7 @@ public final class VideoExporter {
     private boolean rightEye;
     private Vec3 stereoCenter;
     private static final Panorama.Face[] FACES = Panorama.Face.values();
+    private final List<Panorama.Face> captureFaces;
     private int faceIndex;
     private final int captureWidth, captureHeight;
     private TextureTarget downsampled;
@@ -99,7 +101,7 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
-        this.stereo = settings.stereo && !settings.panorama;
+        this.stereo = settings.projection() == ExportSettings.Projection.STEREO;
         this.withDepth = settings.depthMap && settings.format == ExportSettings.Format.PNG_SEQUENCE;
         this.transparent = settings.transparentSky && settings.supportsAlpha();
         if (this.transparent && ShaderPacks.active()) {
@@ -112,8 +114,13 @@ public final class VideoExporter {
         this.height = settings.outputHeight();
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
-        this.captureWidth = settings.panorama ? settings.sphereWidth() / 4 : stereo ? width / 2 : width;
-        this.captureHeight = settings.panorama ? captureWidth : height;
+        this.captureWidth = switch (settings.projection()) {
+            case PANORAMA -> settings.sphereWidth() / 4;
+            case CUBE -> width / 4;
+            case STEREO -> width / 2;
+            case FLAT -> width;
+        };
+        this.captureHeight = settings.panorama || settings.cubeMap ? captureWidth : height;
         if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
             || captureWidth > max / scale || captureHeight > max / scale) {
             throw new IllegalArgumentException(Component.translatable("reprise.export.size_limit", (long) this.width * scale,
@@ -122,6 +129,7 @@ public final class VideoExporter {
         this.renderWidth = captureWidth * scale;
         this.renderHeight = captureHeight * scale;
         this.panorama = settings.panorama ? new Panorama(width, height, captureWidth, withDepth) : null;
+        this.captureFaces = panorama != null ? panorama.captureFaces : settings.cubeMap ? List.of(FACES) : List.of();
         this.schedule = session.project().frameSchedule(this.start, this.end, settings.fps);
         if (this.schedule.frameCount() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("This range exceeds the supported video frame count");
@@ -169,7 +177,7 @@ public final class VideoExporter {
         this.savedVsync = options.enableVsync().get();
         this.savedVolume = options.getSoundSourceOptionInstance(SoundSource.MASTER).get();
         this.savedFade = options.chunkSectionFadeInTime().get();
-        options.hideGui = settings.hideHud || panorama != null;
+        options.hideGui = settings.hideHud || !captureFaces.isEmpty();
         options.framerateLimit().set(260);
         options.enableVsync().set(false);
         this.savedMusic = options.getSoundSourceOptionInstance(SoundSource.MUSIC).get();
@@ -222,7 +230,7 @@ public final class VideoExporter {
             exporter.width, exporter.height);
     }
 
-    public Panorama.Face panoramaFace() { return panorama == null ? null : panorama.captureFaces.get(faceIndex); }
+    public Panorama.Face panoramaFace() { return captureFaces.isEmpty() ? null : captureFaces.get(faceIndex); }
 
     public float eyeOffset() { return stereo ? (rightEye ? 0.1f : -0.1f) : 0; }
 
@@ -230,11 +238,11 @@ public final class VideoExporter {
     public Vec3 stereoCenter() { return stereoCenter; }
 
     public boolean includesHud() {
-        return panorama == null && !this.settings.hideHud;
+        return captureFaces.isEmpty() && !this.settings.hideHud;
     }
 
     public boolean handsOnly() {
-        return panorama == null && this.settings.hideHud && this.settings.handsOnly;
+        return captureFaces.isEmpty() && this.settings.hideHud && this.settings.handsOnly;
     }
 
     public int outputWidth() { return this.width; }
@@ -402,9 +410,9 @@ public final class VideoExporter {
                 return; // Render the same replay tick and partial tick on white.
             }
         }
-        if (panorama != null) {
+        if (!captureFaces.isEmpty()) {
             stableFrames = 0;
-            if (++faceIndex < panorama.captureFaces.size()) return;
+            if (++faceIndex < captureFaces.size()) return;
             faceIndex = 0;
         }
         if (stereo) {
@@ -413,7 +421,7 @@ public final class VideoExporter {
         }
         if (this.audio != null) {
             try {
-                if (panorama != null || stereo) mc.getSoundManager().updateSource(mc.gameRenderer.getMainCamera());
+                if (!captureFaces.isEmpty() || stereo) mc.getSoundManager().updateSource(mc.gameRenderer.getMainCamera());
                 this.audio.frame();
             } catch (java.io.IOException e) {
                 this.writeError = e;
@@ -515,8 +523,8 @@ public final class VideoExporter {
         try {
             int written = 0, face = 0;
             byte[] leftColor = null, leftDepth = null;
-            byte[][] colors = panorama == null ? null : new byte[FACES.length][];
-            byte[][] depths = panorama == null || !withDepth ? null : new byte[FACES.length][];
+            byte[][] colors = captureFaces.isEmpty() ? null : new byte[FACES.length][];
+            byte[][] depths = captureFaces.isEmpty() || !withDepth ? null : new byte[FACES.length][];
             while (true) {
                 Frame captured = this.frames.take();
                 if (captured == END) {
@@ -534,14 +542,14 @@ public final class VideoExporter {
                     AlphaMatte.combine(bytes, white);
                 }
                 byte[] depth = captured.depth;
-                if (panorama != null) {
-                    int slot = panorama.captureFaces.get(face).ordinal();
+                if (!captureFaces.isEmpty()) {
+                    int slot = captureFaces.get(face).ordinal();
                     colors[slot] = bytes;
                     if (withDepth) depths[slot] = depth;
-                    if (++face < panorama.captureFaces.size()) continue;
+                    if (++face < captureFaces.size()) continue;
                     face = 0;
-                    bytes = panorama.project(colors);
-                    if (withDepth) depth = panorama.project(depths);
+                    bytes = panorama == null ? Panorama.cross(colors, captureWidth, false) : panorama.project(colors);
+                    if (withDepth) depth = panorama == null ? Panorama.cross(depths, captureWidth, true) : panorama.project(depths);
                 }
                 if (stereo) {
                     if (leftColor == null) {
@@ -723,7 +731,7 @@ public final class VideoExporter {
         options.getSoundSourceOptionInstance(SoundSource.MASTER).set(this.savedVolume);
         options.chunkSectionFadeInTime().set(this.savedFade);
         options.getSoundSourceOptionInstance(SoundSource.MUSIC).set(this.savedMusic);
-        if (panorama != null) mc.gameRenderer.getMainCamera().disablePanoramicMode();
+        if (!captureFaces.isEmpty()) mc.gameRenderer.getMainCamera().disablePanoramicMode();
         CameraPath.setForced(false);
         this.session.setPlaying(false);
         this.mc.resizeGui();

@@ -169,6 +169,7 @@
   "reprise.interpolation.linear": "Linear",
   "reprise.interpolation.ease": "Ease",
   "reprise.interpolation.hold": "Hold",
+  "reprise.export.cube": "Cube map",
   "reprise.export.stereo": "Stereo 3D",
   "reprise.export.flat": "Flat",
   "reprise.export.coverage": "%s° FOV",

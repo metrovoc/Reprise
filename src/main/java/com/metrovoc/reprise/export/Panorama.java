@@ -70,6 +70,35 @@ public final class Panorama {
         return result;
     }
 
+    /** Pack bottom-up GPU rows into a horizontal cube cross without resampling. */
+    static byte[] cross(byte[][] faces, int size, boolean depth) {
+        int stride = size * 4;
+        byte[] result = new byte[Math.multiplyExact(faces[0].length, 12)];
+        if (depth) {
+            // Empty tiles have the same far-plane value as sky in the packed depth texture.
+            var pixels = java.nio.ByteBuffer.wrap(result).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer();
+            while (pixels.hasRemaining()) pixels.put(1.0f);
+        }
+        for (Face face : Face.values()) {
+            int column = switch (face) {
+                case LEFT -> 0;
+                case RIGHT -> 2;
+                case BACK -> 3;
+                default -> 1;
+            };
+            int row = switch (face) {
+                case BOTTOM -> 0;
+                case TOP -> 2;
+                default -> 1;
+            };
+            for (int y = 0; y < size; y++) {
+                System.arraycopy(faces[face.ordinal()], y * stride, result,
+                    ((row * size + y) * 4 + column) * stride, stride);
+            }
+        }
+        return result;
+    }
+
     float[] radialScale() { return radialScale; }
 
     /** Camera.setRotation uses YXZ Euler angles. Apply the face offset in the shot's local coordinates. */

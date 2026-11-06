@@ -151,6 +151,9 @@ follows the replay and the shader frame counter advances once per exported frame
   The camera path sets the forward view. Each frame samples one replay instant and video files carry their
   crop bounds for spherical players. Panoramas capture the world without first-person
   hands or HUD overlays, and the optional stereo soundtrack follows the forward view.
+- **Cube map** exports a 4:3 cross of six square faces. The middle row is left, front, right, back.
+  The top and bottom faces sit above and below the front. Each face keeps its original pixels and depth
+  along its own viewing axis. With transparent sky enabled, unused tiles are transparent.
 - Select **Stereo 3D** for a side-by-side perspective shot. Each eye occupies half the output width, with
   the left eye first. Choose 3840×1080 for two 1920×1080 views. The eyes render the same replay instant
   from positions 0.2 blocks apart, and the soundtrack is recorded from their midpoint. Video files carry
