@@ -1,0 +1,4 @@
+replay latest
+wait 100
+replay dump 35 50
+quit

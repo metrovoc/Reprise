@@ -62,8 +62,7 @@ public final class RepriseSteps {
                     mc.player.setOldPosAndRot();
                 }
                 case "spectate" -> {
-                    Entity target = mc.level.getEntity(s.recorderId());
-                    mc.setCameraEntity(target);
+                    s.spectate(mc.level.getEntity(s.recorderId()));
                 }
                 case "export" -> {
                     var settings = s.project().export;
@@ -78,6 +77,7 @@ public final class RepriseSteps {
                     s.project().keyframes.clear();
                     s.project().save();
                 }
+                case "dump" -> s.dump(Integer.parseInt(a[1]), Integer.parseInt(a[2]));
                 case "exit" -> s.exit();
                 case "state" -> {
                     int entities = 0;

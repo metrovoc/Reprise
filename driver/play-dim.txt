@@ -1,0 +1,15 @@
+replay latest
+wait 100
+replay spectate
+replay seek 75
+wait 20
+replay state
+shot dim_play_nether
+replay seek 30
+wait 10
+replay state
+replay play
+wait 160
+replay state
+shot dim_play_back
+quit

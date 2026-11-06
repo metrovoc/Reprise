@@ -114,12 +114,12 @@ public final class PlaybackControls {
             // Spectate what the crosshair points at; sneak to fly free again.
             while (mc.options.keyAttack.consumeClick()) {
                 if (mc.getCameraEntity() == mc.player && mc.hitResult instanceof EntityHitResult hit) {
-                    mc.setCameraEntity(hit.getEntity());
+                    session.spectate(hit.getEntity());
                 }
             }
             if (mc.getCameraEntity() != mc.player && mc.options.keyShift.isDown()) {
                 Entity target = mc.getCameraEntity();
-                mc.setCameraEntity(mc.player);
+                session.stopSpectating();
                 if (target != null) {
                     mc.player.snapTo(target.getX(), target.getEyeY() - mc.player.getEyeHeight(), target.getZ(), target.getYRot(), target.getXRot());
                     mc.player.setOldPosAndRot();
@@ -127,6 +127,7 @@ public final class PlaybackControls {
             }
         }
         if (mc.getCameraEntity() != null && mc.getCameraEntity() != mc.player && mc.getCameraEntity().isRemoved()) {
+            // Gone for now (death, dimension change); the session picks it up again when it comes back.
             mc.setCameraEntity(mc.player);
         }
     }

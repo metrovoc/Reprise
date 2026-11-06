@@ -1,0 +1,18 @@
+world
+cmd gamerule send_command_feedback false
+cmd gamerule advance_time false
+cmd time set noon
+gui 2
+cmd tp @s 0 -60 0 0 20
+wait 20
+record start
+wait 40
+cmd execute in minecraft:the_nether run tp @s 0 70 0 0 20
+wait 80
+shot dim_live_nether
+cmd execute in minecraft:overworld run tp @s 0 -60 0 0 20
+wait 60
+shot dim_live_back
+record stop
+wait 5
+quit

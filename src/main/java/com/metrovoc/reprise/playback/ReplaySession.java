@@ -99,6 +99,7 @@ public final class ReplaySession {
     private int recorderId = Integer.MIN_VALUE;
     private boolean cameraPlaced;
     private int failedPackets;
+    private UUID spectating;
     private final com.metrovoc.reprise.editor.ReplayProject project;
 
     private ReplaySession(ReplayFile file, Screen exitScreen) {
@@ -215,6 +216,17 @@ public final class ReplaySession {
         return this.seeking;
     }
 
+    /** Spectates {@code entity} until {@link #stopSpectating()}, following it across respawns and seeks. */
+    public void spectate(Entity entity) {
+        this.spectating = entity.getUUID();
+        this.mc.setCameraEntity(entity);
+    }
+
+    public void stopSpectating() {
+        this.spectating = null;
+        this.mc.setCameraEntity(this.mc.player);
+    }
+
     public int recorderId() {
         return this.recorderId;
     }
@@ -245,6 +257,16 @@ public final class ReplaySession {
         if (!this.cameraPlaced && this.mc.player != null) {
             placeCameraAtRecorder();
         }
+        // Keep following a spectated entity that was respawned, changed dimension or came back after a seek.
+        if (this.spectating != null && this.mc.player != null && this.mc.getCameraEntity() == this.mc.player) {
+            for (Entity e : this.mc.level.entitiesForRendering()) {
+                if (e.getUUID().equals(this.spectating) && e != this.mc.player) {
+                    this.mc.setCameraEntity(e);
+                    PovHands.snap();
+                    break;
+                }
+            }
+        }
     }
 
     /** Milliseconds per client tick while this replay plays. */
@@ -264,8 +286,6 @@ public final class ReplaySession {
         Vec3 pos = camera == null ? null : camera.position();
         float yRot = camera == null ? 0 : camera.getYRot();
         float xRot = camera == null ? 0 : camera.getXRot();
-        Entity spectated = this.mc.getCameraEntity() != camera ? this.mc.getCameraEntity() : null;
-        UUID spectatedId = spectated == null ? null : spectated.getUUID();
 
         int targetSegment = segmentFor(target);
         boolean forwardInPlace = target > this.tick && !resetBetween(this.segment, targetSegment)
@@ -289,9 +309,9 @@ public final class ReplaySession {
             this.mc.player.setOldPosAndRot();
             this.cameraPlaced = true;
         }
-        if (spectatedId != null && this.mc.level != null) {
+        if (this.spectating != null && this.mc.level != null) {
             for (Entity e : this.mc.level.entitiesForRendering()) {
-                if (e.getUUID().equals(spectatedId)) {
+                if (e.getUUID().equals(this.spectating) && e != this.mc.player) {
                     this.mc.setCameraEntity(e);
                 }
             }
@@ -386,6 +406,45 @@ public final class ReplaySession {
         byte[] bytes = new byte[length];
         this.reader.get(bytes);
         return bytes;
+    }
+
+    /** Logs the packet types of recorded ticks {@code from} to {@code to}, for debugging recordings. */
+    public void dump(int from, int to) throws IOException {
+        int seg = segmentFor(from);
+        ByteBuffer buf = this.file.segment(seg);
+        int t = this.meta.segments.get(seg).startTick;
+        boolean snapshot = true;
+        StringBuilder line = new StringBuilder();
+        while (buf.hasRemaining() && t <= to) {
+            int action = buf.get();
+            switch (action) {
+                case Actions.TICK -> {
+                    if (t >= from) {
+                        Reprise.LOGGER.info("tick {}: {}", t, line);
+                    }
+                    line.setLength(0);
+                    t++;
+                }
+                case Actions.SNAPSHOT_END -> snapshot = false;
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
+                    int length = Varints.read(buf);
+                    byte[] bytes = new byte[length];
+                    buf.get(bytes);
+                    if (!snapshot && action == Actions.GAME_PACKET) {
+                        try {
+                            line.append(PacketCodecs.decode(this.gameCodec, bytes).type().id().getPath()).append(' ');
+                        } catch (Exception e) {
+                            line.append("? ");
+                        }
+                    }
+                }
+                case Actions.CHUNK_REF -> {
+                    Varints.read(buf);
+                    line.append("chunk ");
+                }
+                default -> throw new IllegalStateException();
+            }
+        }
     }
 
     // Snapshots.
@@ -493,6 +552,10 @@ public final class ReplaySession {
         this.mc.gui.clearTitles();
         this.mc.gui.getChat().clearMessages(false);
         this.mc.particleEngine.clearParticles();
+        // The login that follows must make a new camera: a reused one keeps its old level, and a later respawn
+        // into that dimension would then not switch worlds.
+        this.mc.setCameraEntity(null);
+        this.mc.player = null;
     }
 
     // Packet delivery.
