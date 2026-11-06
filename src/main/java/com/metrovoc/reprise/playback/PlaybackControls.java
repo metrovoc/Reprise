@@ -288,7 +288,10 @@ public final class PlaybackControls {
         }
         project.putCameraKey(k);
         project.save();
-        mc.gui.setOverlayMessage(Component.translatable("reprise.editor.keyframe.added", Timecode.precise(k.tick)), false);
+        if (!(mc.screen instanceof EditorScreen)) {
+            // The editor shows the new key in its help line; the action bar would sit on top of the dock.
+            mc.gui.setOverlayMessage(Component.translatable("reprise.editor.keyframe.added", Timecode.precise(k.tick)), false);
+        }
         return k;
     }
 
@@ -304,7 +307,7 @@ public final class PlaybackControls {
         int x = (w - barW) / 2;
         int y = h - (ReplaySession.showingRecordedHotbar() ? 70 : 14);
         HUD_TIMELINE.setBounds(x, y, barW, 6);
-        HUD_TIMELINE.draw(g, mc.font, session, session.visualTick(partialTick), java.util.Set.of(), false, java.util.Map.of());
+        HUD_TIMELINE.drawBar(g, session, session.visualTick(partialTick));
         String state = (session.isPlaying() ? "▶ " : "❚❚ ") + Timecode.format(session.visualTick(partialTick)) + " / "
             + Timecode.format(session.duration()) + "   " + formatSpeed(session.speed());
         g.text(mc.font, state, x, y - 11, 0xFFFFFFFF);
@@ -317,6 +320,34 @@ public final class PlaybackControls {
                 RepriseKeys.PLAY_PAUSE.getTranslatedKeyMessage()).getString();
         }
         g.text(mc.font, hint, x + barW - mc.font.width(hint), y - 11, 0xFFB0B0B8);
+        drawProblems(g, session, w - 6, 6);
+    }
+
+    /** A small warning, top right, when recorded data could not be read; the reason is spelled out on hover. */
+    public static void drawProblems(GuiGraphicsExtractor g, ReplaySession session, int right, int y) {
+        int count = session.unreadable() + session.meta().unrecordedCount();
+        if (count == 0) return;
+        Minecraft mc = Minecraft.getInstance();
+        String text = Component.translatable("reprise.hud.problems", count).getString();
+        int x = right - mc.font.width(text) - 6;
+        g.fill(x, y, right, y + 12, 0xC0302410);
+        g.text(mc.font, text, x + 3, y + 2, 0xFFFFC14D);
+    }
+
+    public static java.util.List<Component> problemDetails(ReplaySession session) {
+        var lines = new java.util.ArrayList<Component>();
+        if (session.meta().unrecordedCount() > 0) {
+            lines.add(Component.translatable("reprise.problems.unrecorded", session.meta().unrecordedCount()));
+        }
+        if (session.unreadable() > 0) {
+            lines.add(Component.translatable("reprise.problems.unreadable", session.unreadable()));
+        }
+        var mods = com.metrovoc.reprise.format.ModDifferences.describe(session.meta());
+        if (!mods.isEmpty()) {
+            lines.add(Component.translatable("reprise.problems.mods"));
+            mods.forEach(m -> lines.add(Component.literal("  " + m)));
+        }
+        return lines;
     }
 
     private PlaybackControls() {}

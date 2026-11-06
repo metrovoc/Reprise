@@ -4,12 +4,16 @@ import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.RepriseKeys;
 import com.metrovoc.reprise.format.ReplayClip;
 import com.metrovoc.reprise.export.ExportScreen;
+import com.metrovoc.reprise.gui.PopupMenu;
 import com.metrovoc.reprise.gui.Timecode;
 import com.metrovoc.reprise.gui.Timeline;
 import com.metrovoc.reprise.playback.CameraController;
 import com.metrovoc.reprise.playback.CameraPath;
 import com.metrovoc.reprise.playback.PlaybackControls;
 import com.metrovoc.reprise.playback.ReplaySession;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
@@ -22,15 +26,14 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * The replay editor: a timeline over the live world. The mouse is free for the timeline while the movement keys still
- * fly the camera. Tab (or Escape) goes back to looking around with the mouse.
+ * The replay editor: a dock along the bottom of the live world. One row of controls (playback, camera keys, then
+ * More, Export and Exit), a line of help about what is selected or under the pointer, and the timeline with a lane per
+ * kind of key. Everything else opens from More, so nothing covers the shot. The movement keys still fly the camera;
+ * Tab (or Escape) goes back to looking around with the mouse.
  */
 public final class EditorScreen extends Screen {
-    private static final int ROW_STEP = 22;
-    private static final int TIMELINE_BOTTOM_MARGIN = 4;
-    private static final int TIMELINE_HEIGHT = 22;
-    private int panelHeight;
-    private Button[][] toolbarGroups;
+    private static final float[] SPEEDS = {0.1F, 0.25F, 0.5F, 1, 2, 4, 8, 16};
+    private static final int MARGIN = 6;
 
     private final ReplaySession session;
     private final Timeline timeline = new Timeline();
@@ -42,20 +45,28 @@ public final class EditorScreen extends Screen {
     private boolean rangeDragged;
     private double rangeStartX, rangeEndX;
     private CameraKeyDrag dragging;
+    private Boolean draggingRangeEdge;
     private boolean panning;
     private double scrubTick = -1;
     private long lastScrubSeek;
+
+    private int dockTop;
+    private int statusY;
+    private int timeX;
+    private PopupMenu menu;
+
     private Button playButton;
     private Button speedButton;
-    private Button pathButton;
-    private Button interpolationButton;
-    private Button namesButton;
+    private Button addKeyButton;
+    private Button curveButton;
+    private Button editKeyButton;
+    private Button deleteButton;
     private Button fewerTurns;
     private Button moreTurns;
-    private Button saveClip;
-    private Button editKey;
-    private Button undoButton;
-    private Button redoButton;
+    private Button previewButton;
+    private Button moreButton;
+    private Button exportButton;
+    private Button exitButton;
 
     private Keyframe singleKey() {
         return selection.size() == 1 ? selection.getFirst() : null;
@@ -90,117 +101,194 @@ public final class EditorScreen extends Screen {
         return getFocused() == null || !(getFocused() instanceof net.minecraft.client.gui.components.EditBox);
     }
 
+    // Layout
+
     @Override
     protected void init() {
-        addRenderableWidget(Button.builder(Component.translatable("reprise.entities.title"), b ->
-            this.minecraft.setScreen(new EntityScreen(this, this.session))).bounds(6, 6, 72, 20).build());
-        Button orbitPoint = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.orbit_point"), b ->
-            this.minecraft.setScreen(new OrbitPointScreen(this, this.session))).bounds(82, 6, 84, 20).build());
-        orbitPoint.active = this.minecraft.getCameraEntity() == this.minecraft.player;
-        addRenderableWidget(Button.builder(Component.translatable("reprise.environment.title"), b ->
-            this.minecraft.setScreen(new EnvironmentScreen(this, this.session))).bounds(170, 6, 94, 20).build());
-        var freezeButton = toolbarButton(Component.translatable("reprise.editor.freeze"),
-            b -> minecraft.setScreen(new FreezeScreen(this, session)), null);
-        undoButton = toolbarButton(Component.translatable("reprise.editor.undo"), b -> restoreEdit(false), null);
-        redoButton = toolbarButton(Component.translatable("reprise.editor.redo"), b -> restoreEdit(true), null);
-        this.editKey = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.edit_key"), b -> {
+        menu = null;
+        playButton = button(Component.literal("▶"), b -> PlaybackControls.togglePlay(session),
+            tip("reprise.editor.play.tooltip", RepriseKeys.PLAY_PAUSE));
+        playButton.setWidth(20);
+        speedButton = button(Component.literal("1×"), b -> openSpeedMenu(), tip("reprise.editor.speed.tooltip", null));
+        speedButton.setWidth(Math.max(speedButton.getWidth(), font.width("0.25×") + 10));
+        addKeyButton = button(Component.translatable("reprise.editor.add_key"), b -> addKeyframe(),
+            tip("reprise.editor.add_key.tooltip", RepriseKeys.ADD_KEYFRAME));
+        curveButton = button(Component.translatable("reprise.interpolation.smooth"), b -> openCurveMenu(), tip("reprise.editor.curve.tooltip", null));
+        reserve(curveButton, "reprise.interpolation.smooth", "reprise.interpolation.linear", "reprise.interpolation.ease",
+            "reprise.interpolation.hold", "reprise.interpolation.spline", "reprise.interpolation.spectator");
+        curveButton.setWidth(curveButton.getWidth() + font.width(" ▴"));
+        editKeyButton = button(Component.translatable("reprise.editor.edit_key"), b -> {
             var key = singleKey();
             if (key != null) minecraft.setScreen(new CameraKeyScreen(this, session, key));
-        }).bounds(6, 54, 122, 20).build());
-        this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
-            .bounds(6, 78, 60, 20).build());
-        this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
-            .bounds(68, 78, 60, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("reprise.shake.title"), b ->
-            minecraft.setScreen(new CameraShakeScreen(this, session))).bounds(132, 78, 110, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("reprise.audio.title"), b ->
-            minecraft.setScreen(new AudioCueScreen(this, session))).bounds(246, 78, 68, 20).build());
-        saveClip = toolbarButton(Component.translatable("reprise.editor.save_clip"), b -> saveClip(), "reprise.editor.save_clip.tooltip");
-        int topX = 6;
-        for (Button button : new Button[]{undoButton, redoButton, saveClip, freezeButton}) {
-            button.setPosition(topX, 30);
-            topX += button.getWidth() + 4;
+        }, tip("reprise.editor.edit_key.tooltip", null));
+        deleteButton = button(Component.translatable("reprise.editor.delete"), b -> deleteSelected(), tip("reprise.editor.delete.tooltip", null));
+        fewerTurns = button(Component.literal("−⟲"), b -> changeTurns(-1), tip("reprise.editor.fewer_turns", null));
+        moreTurns = button(Component.literal("+⟲"), b -> changeTurns(1), tip("reprise.editor.more_turns", null));
+        previewButton = button(Component.translatable("reprise.editor.preview.off"), b -> CameraPath.setPreview(!CameraPath.preview()),
+            tip("reprise.editor.preview.tooltip", null));
+        reserve(previewButton, "reprise.editor.preview.on", "reprise.editor.preview.off");
+        moreButton = button(Component.translatable("reprise.editor.more"), b -> openMoreMenu(), null);
+        exportButton = button(Component.translatable("reprise.editor.export"), b -> minecraft.setScreen(new ExportScreen(this, session)),
+            tip("reprise.editor.export.tooltip", null));
+        exitButton = button(Component.translatable("reprise.editor.exit"), b -> session.exit(), null);
+        layoutDock();
+        updateLabels();
+    }
+
+    private Tooltip tip(String key, KeyMapping shortcut) {
+        Component text = Component.translatable(key);
+        if (shortcut != null) text = Component.translatable("reprise.tooltip.shortcut", text, shortcut.getTranslatedKeyMessage());
+        return Tooltip.create(text);
+    }
+
+    private Button button(Component label, Button.OnPress press, Tooltip tooltip) {
+        var builder = Button.builder(label, press).size(Math.max(20, font.width(label) + 10), 20);
+        if (tooltip != null) builder.tooltip(tooltip);
+        return addRenderableWidget(builder.build());
+    }
+
+    private void reserve(Button button, String... keys) {
+        for (String key : keys) button.setWidth(Math.max(button.getWidth(), font.width(Component.translatable(key)) + 10));
+    }
+
+    /** One row of controls, the help line, then the timeline; the row wraps only on very narrow screens. */
+    private void layoutDock() {
+        int timelineHeight = Timeline.editorHeight(project());
+        int timelineY = height - MARGIN - timelineHeight;
+        timeline.setBounds(MARGIN + Timeline.GUTTER, timelineY, width - 2 * MARGIN - Timeline.GUTTER, timelineHeight);
+        statusY = timelineY - 13;
+
+        Button[] left = {playButton, speedButton};
+        Button[] middle = {addKeyButton, curveButton, editKeyButton, fewerTurns, moreTurns, deleteButton, previewButton};
+        Button[] right = {moreButton, exportButton, exitButton};
+        int rightWidth = rowWidth(right);
+        int x = MARGIN;
+        int rowY = statusY - 24;
+        for (Button b : left) {
+            b.setPosition(x, rowY);
+            x += b.getWidth() + 2;
         }
+        timeX = x + 4;
+        x = timeX + font.width("0:00:00.0 / 0:00:00") + 8;
+        int middleWidth = -2;
+        for (Button b : middle) if (b.visible) middleWidth += b.getWidth() + 2;
+        if (x + middleWidth > width - MARGIN - rightWidth - 8) {
+            // Narrow: camera controls get a row of their own above.
+            rowY -= 22;
+            x = MARGIN;
+            for (Button b : left) b.setY(rowY + 22);
+        }
+        for (Button b : middle) {
+            b.setPosition(x, rowY);
+            if (b.visible) x += b.getWidth() + 2;
+        }
+        x = width - MARGIN - rightWidth;
+        for (Button b : right) {
+            b.setPosition(x, statusY - 24);
+            x += b.getWidth() + 2;
+        }
+        dockTop = rowY - 5;
+    }
+
+    private static int rowWidth(Button[] buttons) {
+        int w = -2;
+        for (Button b : buttons) w += b.getWidth() + 2;
+        return w;
+    }
+
+    private void updateLabels() {
+        Keyframe selected = singleKey();
+        boolean any = !selection.isEmpty();
+        playButton.setMessage(Component.literal(session.isPlaying() ? "❚❚" : "▶"));
+        speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(session.speed())));
+        curveButton.visible = editKeyButton.visible = selected != null;
+        deleteButton.visible = any;
+        fewerTurns.visible = moreTurns.visible = selected != null && selected.target != null
+            && selected.target.mode() == Keyframe.Tracking.ORBIT;
+        if (selected != null) {
+            Component curve;
+            if (selected.spectatorAfterKey != null) curve = Component.translatable("reprise.interpolation.spectator");
+            else if (selected.spline != null) curve = Component.translatable("reprise.interpolation.spline");
+            else curve = Component.translatable("reprise.interpolation." + selected.interpolation.name().toLowerCase());
+            curveButton.setMessage(Component.empty().append(curve).append(" ▴"));
+        }
+        previewButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.preview.on" : "reprise.editor.preview.off"));
+        layoutDock();
+    }
+
+    @Override
+    public void tick() {
+        updateLabels();
+    }
+
+    private ReplayProject project() {
+        return this.session.project();
+    }
+
+    // Menus
+
+    private void openMenu(PopupMenu next, Button anchor) {
+        menu = next.place(font, anchor.getX(), anchor.getY() - 2, width, height);
+    }
+
+    private void openSpeedMenu() {
+        var m = new PopupMenu();
+        for (float speed : SPEEDS) {
+            m.check(Component.literal(PlaybackControls.formatSpeed(speed)), Math.abs(session.speed() - speed) < 1e-4, () -> session.setSpeed(speed));
+        }
+        openMenu(m, speedButton);
+    }
+
+    private void openCurveMenu() {
+        Keyframe selected = singleKey();
+        if (selected == null) return;
+        var m = new PopupMenu();
+        for (Keyframe.Interpolation type : Keyframe.Interpolation.values()) {
+            boolean current = selected.spline == null && selected.spectatorAfterKey == null && selected.interpolation == type;
+            m.check(Component.translatable("reprise.interpolation." + type.name().toLowerCase() + ".long"), current, () -> setInterpolation(type));
+        }
+        openMenu(m, curveButton);
+    }
+
+    private void openMoreMenu() {
+        var p = project();
+        boolean free = minecraft.getCameraEntity() == minecraft.player;
+        var m = new PopupMenu()
+            .add(Component.translatable("reprise.editor.undo"), "Ctrl+Z", p.canUndo(), () -> restoreEdit(false))
+            .add(Component.translatable("reprise.editor.redo"), "Ctrl+Shift+Z", p.canRedo(), () -> restoreEdit(true))
+            .separator()
+            .add(Component.translatable("reprise.menu.scene"), () -> minecraft.setScreen(new EnvironmentScreen(this, session)))
+            .add(Component.translatable("reprise.menu.entities"), () -> minecraft.setScreen(new EntityScreen(this, session)))
+            .check(Component.translatable("reprise.menu.names"), !p.hideNames, () -> {
+                p.checkpoint();
+                p.hideNames = !p.hideNames;
+                p.save();
+            })
+            .separator()
+            .add(Component.translatable("reprise.menu.speed_key", PlaybackControls.formatSpeed(session.speed())), this::addSpeedKey)
+            .add(Component.translatable("reprise.menu.freeze"), () -> minecraft.setScreen(new FreezeScreen(this, session)))
+            .add(Component.translatable("reprise.menu.orbit"), null, free, () -> minecraft.setScreen(new OrbitPointScreen(this, session)))
+            .add(Component.translatable("reprise.menu.shake"), () -> minecraft.setScreen(new CameraShakeScreen(this, session)))
+            .add(Component.translatable("reprise.menu.audio"), () -> minecraft.setScreen(new AudioCueScreen(this, session)))
+            .separator()
+            .add(Component.translatable("reprise.menu.range_start"), "[", true, () -> setRange(true))
+            .add(Component.translatable("reprise.menu.range_end"), "]", true, () -> setRange(false))
+            .add(Component.translatable("reprise.menu.range_clear"), null, p.exportStart >= 0 || p.exportEnd >= 0, this::clearRange)
+            .add(Component.translatable("reprise.menu.save_clip"), null, p.worldTick(p.start()) < p.worldTick(p.end(session.duration())), this::saveClip);
         if (session.file().hasCameraPaths()) {
-            addRenderableWidget(Button.builder(Component.translatable("reprise.editor.replaymod_paths"), b -> {
+            m.separator().add(Component.translatable("reprise.editor.replaymod_paths"), () -> {
                 try {
                     minecraft.setScreen(new ReplayModPathsScreen(this, session));
                 } catch (java.io.IOException | RuntimeException e) {
                     minecraft.setScreen(new AlertScreen(() -> minecraft.setScreen(this), Component.translatable("reprise.editor.path_failed"),
                         Component.literal(String.valueOf(e.getMessage()))));
                 }
-            }).bounds(132, 54, 110, 20).build());
+            });
         }
-        this.playButton = toolbarButton(Component.literal("▶"), b -> PlaybackControls.togglePlay(session), "reprise.editor.play");
-        playButton.setWidth(Math.max(playButton.getWidth(), buttonWidth(Component.literal("❚❚"))));
-        var slower = toolbarButton(Component.literal("-"), b -> PlaybackControls.changeSpeed(session, false), "key.reprise.slower");
-        this.speedButton = toolbarButton(Component.literal("0.25×"), b -> session.setSpeed(1), "reprise.editor.speed");
-        var faster = toolbarButton(Component.literal("+"), b -> PlaybackControls.changeSpeed(session, true), "key.reprise.faster");
-        var addKey = toolbarButton(Component.translatable("reprise.editor.keyframe"), b -> addKeyframe(), "reprise.editor.keyframe.tooltip");
-        interpolationButton = toolbarButton(Component.empty(), b -> cycleInterpolation(), "reprise.editor.interpolation.tooltip");
-        var delete = toolbarButton(Component.translatable("reprise.editor.delete"), b -> deleteSelected(), null);
-        var speedKey = toolbarButton(Component.translatable("reprise.editor.speed_key"), b -> addSpeedKey(), "reprise.editor.speed_key.tooltip");
-        pathButton = toolbarButton(Component.empty(), b -> CameraPath.setPreview(!CameraPath.preview()), "reprise.editor.path.tooltip");
-        namesButton = toolbarButton(Component.empty(), b -> {
-            project().checkpoint();
-            project().hideNames = !project().hideNames;
-            project().save();
-        }, "reprise.editor.names.tooltip");
-        var rangeStart = toolbarButton(Component.literal("["), b -> setRange(true), "reprise.editor.range_start");
-        var rangeEnd = toolbarButton(Component.literal("]"), b -> setRange(false), "reprise.editor.range_end");
-        var export = toolbarButton(Component.translatable("reprise.editor.export"),
-            b -> minecraft.setScreen(new ExportScreen(this, session)), null);
-        var exit = toolbarButton(Component.translatable("reprise.editor.exit"), b -> session.exit(), null);
-
-        reserveLabels(pathButton, "reprise.editor.path.on", "reprise.editor.path.off");
-        reserveLabels(namesButton, "reprise.editor.names.on", "reprise.editor.names.off");
-        reserveLabels(interpolationButton, "reprise.interpolation.smooth", "reprise.interpolation.linear",
-            "reprise.interpolation.ease", "reprise.interpolation.hold", "reprise.interpolation.spline", "reprise.interpolation.spectator");
-        toolbarGroups = new Button[][] {{playButton, slower, speedButton, faster}, {addKey, interpolationButton, delete},
-            {speedKey, pathButton, namesButton}, {rangeStart, rangeEnd}, {export, exit}};
-        layoutToolbar();
-        updateLabels();
+        openMenu(m, moreButton);
     }
 
-    private int buttonWidth(Component label) {
-        return Math.max(16, font.width(label) + (width < 400 ? 8 : 10));
-    }
-
-    private Button toolbarButton(Component label, Button.OnPress press, String tooltip) {
-        var builder = Button.builder(label, press).size(buttonWidth(label), 20);
-        if (tooltip != null) builder.tooltip(Tooltip.create(Component.translatable(tooltip)));
-        return addRenderableWidget(builder.build());
-    }
-
-    private void reserveLabels(Button button, String... keys) {
-        for (String key : keys) button.setWidth(Math.max(button.getWidth(), buttonWidth(Component.translatable(key))));
-    }
-
-    /** Wrap whole control groups, then anchor the rows immediately above the fixed timeline. */
-    private void layoutToolbar() {
-        int x = 6, row = 0;
-        for (Button[] group : toolbarGroups) {
-            int groupWidth = -2;
-            for (Button button : group) groupWidth += button.getWidth() + 2;
-            if (x > 6 && x + groupWidth > width - 6) {
-                row++;
-                x = 6;
-            }
-            if (group == toolbarGroups[toolbarGroups.length - 1]) x = Math.max(x, width - 6 - groupWidth);
-            for (Button button : group) {
-                button.setPosition(x, row * ROW_STEP);
-                x += button.getWidth() + 2;
-            }
-            x += width < 400 ? 2 : 4;
-        }
-        int audioHeight = project().audioCues.isEmpty() ? 0 : Timeline.AUDIO_HEIGHT;
-        int timelineHeight = TIMELINE_HEIGHT + audioHeight;
-        timeline.setBounds(10, height - timelineHeight - TIMELINE_BOTTOM_MARGIN, width - 20, timelineHeight);
-        panelHeight = 64 + row * ROW_STEP + audioHeight;
-        for (Button[] group : toolbarGroups) {
-            for (Button button : group) button.setY(height - panelHeight + 4 + button.getY());
-        }
-    }
+    // Edits
 
     private void saveClip() {
         int start = (int) Math.floor(project().worldTick(project().start()));
@@ -214,7 +302,7 @@ public final class EditorScreen extends Screen {
             Component message;
             try {
                 var saved = ReplayClip.save(source, start, end);
-                message = Component.translatable("reprise.recording.saved", saved.getFileName().toString());
+                message = Component.translatable("reprise.editor.clip_saved", saved.getFileName().toString());
             } catch (Exception e) {
                 Reprise.LOGGER.warn("Could not save replay clip", e);
                 message = Component.literal(String.valueOf(e.getMessage()));
@@ -222,45 +310,9 @@ public final class EditorScreen extends Screen {
             Component result = message;
             client.execute(() -> {
                 if (client.screen == progress) client.setScreen(new AlertScreen(
-                    () -> client.setScreen(this), Component.translatable("reprise.editor.save_clip"), result));
+                    () -> client.setScreen(this), Component.translatable("reprise.menu.save_clip"), result));
             });
         });
-    }
-
-    private void updateLabels() {
-        Keyframe selected = singleKey();
-        this.editKey.active = selected != null;
-        this.undoButton.active = project().canUndo();
-        this.redoButton.active = project().canRedo();
-        this.saveClip.active = project().worldTick(project().start()) < project().worldTick(project().end(this.session.duration()));
-        this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
-        this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
-        int speedWidth = buttonWidth(speedButton.getMessage());
-        if (speedWidth > speedButton.getWidth()) {
-            speedButton.setWidth(speedWidth);
-            layoutToolbar();
-        }
-        this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
-        this.namesButton.setMessage(Component.translatable(project().hideNames ? "reprise.editor.names.off" : "reprise.editor.names.on"));
-        this.fewerTurns.visible = this.moreTurns.visible = selected != null && selected.target != null
-            && selected.target.mode() == Keyframe.Tracking.ORBIT;
-        this.interpolationButton.active = selected != null;
-        if (selected != null && selected.spectatorAfterKey != null) {
-            this.interpolationButton.setMessage(Component.translatable("reprise.interpolation.spectator"));
-        } else {
-            this.interpolationButton.setMessage(selected != null && selected.spline != null
-                ? Component.translatable("reprise.interpolation.spline") : Component.translatable("reprise.interpolation." +
-                (selected == null ? Keyframe.Interpolation.SMOOTH : selected.interpolation).name().toLowerCase()));
-        }
-    }
-
-    @Override
-    public void tick() {
-        updateLabels();
-    }
-
-    private ReplayProject project() {
-        return this.session.project();
     }
 
     private void addKeyframe() {
@@ -275,6 +327,7 @@ public final class EditorScreen extends Screen {
         project().sort();
         project().save();
         this.session.setSpeed(1);
+        layoutDock();
     }
 
     private void deleteSelected() {
@@ -286,23 +339,27 @@ public final class EditorScreen extends Screen {
         }
     }
 
+    private void setInterpolation(Keyframe.Interpolation type) {
+        Keyframe selected = singleKey();
+        if (selected == null) return;
+        project().checkpoint();
+        selected.spline = null;
+        if (selected.spectatorAfterKey != null) {
+            selected.spectatorAfterKey = null;
+            int index = project().keyframes.indexOf(selected);
+            if (index + 1 < project().keyframes.size()) project().keyframes.get(index + 1).spectatorAtKey = null;
+            if (index == 0) selected.spectatorAtKey = null;
+        }
+        selected.interpolation = type;
+        project().save();
+    }
+
     private void cycleInterpolation() {
         Keyframe selected = singleKey();
-        if (selected != null) {
-            project().checkpoint();
-            Keyframe.Interpolation[] values = Keyframe.Interpolation.values();
-            selected.spline = null;
-            if (selected.spectatorAfterKey != null) {
-                selected.spectatorAfterKey = null;
-                selected.interpolation = Keyframe.Interpolation.LINEAR;
-                int index = project().keyframes.indexOf(selected);
-                if (index + 1 < project().keyframes.size()) project().keyframes.get(index + 1).spectatorAtKey = null;
-                if (index == 0) selected.spectatorAtKey = null;
-            } else {
-                selected.interpolation = values[(selected.interpolation.ordinal() + 1) % values.length];
-            }
-            project().save();
-        }
+        if (selected == null) return;
+        Keyframe.Interpolation[] values = Keyframe.Interpolation.values();
+        setInterpolation(selected.spectatorAfterKey != null ? Keyframe.Interpolation.LINEAR
+            : values[(selected.interpolation.ordinal() + 1) % values.length]);
     }
 
     private void setRange(boolean start) {
@@ -322,6 +379,15 @@ public final class EditorScreen extends Screen {
         project().save();
     }
 
+    private void clearRange() {
+        project().checkpoint();
+        project().exportStart = -1;
+        project().exportEnd = -1;
+        project().save();
+    }
+
+    // Drawing
+
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         // The world stays visible behind the editor.
@@ -329,41 +395,67 @@ public final class EditorScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
-        int top = this.height - panelHeight;
-        int infoY = timeline.y - 12;
-        g.fill(0, top, this.width, this.height, Timeline.BACKGROUND);
+        g.fill(0, dockTop, this.width, this.height, Timeline.BACKGROUND);
+        g.fill(0, dockTop, this.width, dockTop + 1, 0xFF34343F);
         super.extractRenderState(g, mouseX, mouseY, a);
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
         var displayedSelection = choosingRange && rangeDragged ? rangePreview : selection;
-        this.timeline.draw(g, this.font, this.session, shown, displayedSelection, true, dragging == null ? java.util.Map.of() : dragging.preview);
+        this.timeline.draw(g, this.font, this.session, shown, displayedSelection, dragging == null ? java.util.Map.of() : dragging.preview);
 
         if (choosingRange && rangeDragged) {
             int left = (int) Math.floor(Math.min(rangeStartX, rangeEndX));
             int right = (int) Math.ceil(Math.max(rangeStartX, rangeEndX));
-            int topOfTrack = timeline.y + 10, bottom = timeline.y + timeline.height;
-            g.fill(left, topOfTrack, right + 1, bottom, 0x446DA8FF);
-            g.fill(left, topOfTrack, left + 1, bottom, 0xFF9DBFFF);
-            g.fill(right, topOfTrack, right + 1, bottom, 0xFF9DBFFF);
+            int top = timeline.y + Timeline.RULER, bottom = timeline.y + timeline.height;
+            g.fill(left, top, right + 1, bottom, 0x446DA8FF);
+            g.fill(left, top, left + 1, bottom, 0xFF9DBFFF);
+            g.fill(right, top, right + 1, bottom, 0xFF9DBFFF);
         }
-        String position = Timecode.precise(shown);
-        if (!session.isPlaying() && scrubTick < 0) {
-            String tick = shown == Math.rint(shown) ? Long.toString((long) shown) : Double.toString(shown);
-            position = Component.translatable("reprise.editor.timeline_position", position, tick).getString();
+
+        // Time, beside the playback controls.
+        String time = Timecode.precise(shown) + " / " + Timecode.format(this.session.duration());
+        g.text(font, time, timeX, playButton.getY() + 6, 0xFFFFFFFF);
+
+        // Help line: what is selected, or what the pointer is over, or what to try first.
+        String info = statusText(displayedSelection);
+        int infoColor = selection.isEmpty() && !(choosingRange && rangeDragged) && dragging == null ? 0xFF9A9AA6 : 0xFFFFC94D;
+        int right = this.width - MARGIN;
+        int problems = session.unreadable() + session.meta().unrecordedCount();
+        if (problems > 0) {
+            String warn = Component.translatable("reprise.hud.problems", problems).getString();
+            int wx = right - font.width(warn);
+            g.text(font, warn, wx, statusY + 2, 0xFFFFC14D);
+            if (mouseX >= wx && mouseX <= right && mouseY >= statusY && mouseY < statusY + 12) {
+                g.setTooltipForNextFrame(font, PlaybackControls.problemDetails(session), java.util.Optional.empty(),
+                    net.minecraft.world.item.ItemStack.EMPTY, mouseX, mouseY);
+            }
+            right = wx - 10;
         }
-        String time = position + " / " + Timecode.format(this.session.duration());
-        int timeX = width - 10 - font.width(time);
-        g.text(font, time, timeX, infoY, 0xFFFFFFFF);
+        int available = right - MARGIN;
+        if (font.width(info) > available) info = font.plainSubstrByWidth(info, available - font.width("…")) + "…";
+        g.text(font, info, MARGIN, statusY + 2, infoColor);
+
+        if (menu != null) {
+            menu.draw(g, font, mouseX, mouseY);
+        } else if (!choosingRange && this.timeline.contains(mouseX, mouseY)) {
+            String tip = hoverText(mouseX, mouseY);
+            if (tip != null) g.setTooltipForNextFrame(Component.literal(tip), mouseX, mouseY);
+        }
+    }
+
+    private String statusText(java.util.Set<Keyframe> displayedSelection) {
         Keyframe selected = singleKey();
-        String info = "";
         if (choosingRange && rangeDragged) {
-            info = Component.translatable("reprise.editor.range_selection", displayedSelection.size()).getString();
-        } else if (dragging != null && dragging.scaling) {
-            info = dragging.collapsed ? Component.translatable("reprise.editor.scale_collapsed").getString()
+            return Component.translatable("reprise.editor.range_selection", displayedSelection.size()).getString();
+        }
+        if (dragging != null && dragging.scaling) {
+            return dragging.collapsed ? Component.translatable("reprise.editor.scale_collapsed").getString()
                 : Component.translatable("reprise.editor.scale_percent", Math.round(dragging.scale * 100)).getString();
-        } else if (selection.size() > 1) {
-            info = Component.translatable("reprise.editor.group_selected", selection.size()).getString();
-        } else if (selected != null) {
-            info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
+        }
+        if (selection.size() > 1) {
+            return Component.translatable("reprise.editor.group_selected", selection.size()).getString();
+        }
+        if (selected != null) {
+            String info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
             if (selected.target != null) {
                 String kind = switch (selected.target.mode()) {
                     case AIM -> "aim";
@@ -378,37 +470,42 @@ public final class EditorScreen extends Screen {
                 String name = actor == null ? "#" + selected.spectatorAfterKey : actor.getName().getString();
                 info = Component.translatable("reprise.editor.target.spectate", name, Timecode.precise(selected.tick)).getString();
             }
+            return info;
         }
-        if (!info.isEmpty() && timeX > 20) {
-            int available = timeX - 16;
-            String label = info;
-            if (font.width(info) > available) {
-                label = font.plainSubstrByWidth(info, available - font.width("…")) + "…";
-                if (mouseX >= 10 && mouseX < timeX && mouseY >= infoY && mouseY < infoY + font.lineHeight) {
-                    g.setTooltipForNextFrame(Component.literal(info), mouseX, mouseY);
-                }
-            }
-            g.text(font, label, 10, infoY, 0xFFFFC94D);
+        if (project().keyframes.isEmpty()) {
+            return Component.translatable("reprise.editor.help.first", RepriseKeys.ADD_KEYFRAME.getTranslatedKeyMessage()).getString();
         }
-        if (!choosingRange && this.timeline.contains(mouseX, mouseY)) {
-            double hover = this.timeline.tickAt(mouseX, this.session.duration());
-            String tip = Component.translatable("reprise.editor.timeline_position", Timecode.precise(hover), Math.round(hover)).getString();
-            if (!project().freezes.isEmpty()) tip = Component.translatable("reprise.editor.shot_world_time",
-                Timecode.precise(hover), Timecode.precise(project().worldTick(hover))).getString();
-            SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
-            var marker = this.timeline.inAudioLane(session, mouseY) ? null : this.timeline.markerAt(this.session, mouseX);
-            var cue = timeline.audioCueAt(session, mouseX, mouseY);
-            if (cue != null) {
-                tip = Component.translatable("reprise.audio.hover", java.nio.file.Path.of(cue.file()).getFileName().toString(),
-                    Double.toString(cue.tick())).getString();
-            } else if (speed != null) {
-                tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed((float) speed.speed),
-                    Component.translatable(speed.hold ? "reprise.interpolation.hold" : "reprise.interpolation.linear")).getString();
-            } else if (marker != null) {
-                tip = Component.translatable("reprise.editor.marker.hover", marker.name.isEmpty() ? Timecode.precise(project().shotTick(marker.tick)) : marker.name).getString();
-            }
-            g.setTooltipForNextFrame(Component.literal(tip), mouseX, mouseY);
+        return Component.translatable(timeline.zoomed(session.duration()) ? "reprise.editor.help.zoomed" : "reprise.editor.help").getString();
+    }
+
+    private String hoverText(int mouseX, int mouseY) {
+        double hover = this.timeline.tickAt(mouseX, this.session.duration());
+        if (timeline.rangeHandleAt(session, mouseX, mouseY) != null) {
+            return Component.translatable("reprise.editor.range_handle").getString();
         }
+        var cue = timeline.audioCueAt(session, mouseX, mouseY);
+        if (cue != null) {
+            return Component.translatable("reprise.audio.hover", java.nio.file.Path.of(cue.file()).getFileName().toString(),
+                Double.toString(cue.tick())).getString();
+        }
+        SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
+        if (speed != null) {
+            return Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed((float) speed.speed),
+                Component.translatable(speed.hold ? "reprise.interpolation.hold" : "reprise.interpolation.linear")).getString();
+        }
+        var marker = this.timeline.markerAt(this.session, mouseX);
+        if (marker != null && timeline.onRuler(mouseX, mouseY)) {
+            return Component.translatable("reprise.editor.marker.hover",
+                marker.name.isEmpty() ? Timecode.precise(project().shotTick(marker.tick)) : marker.name).getString();
+        }
+        Keyframe key = timeline.keyframeAt(session, mouseX, mouseY);
+        if (key != null) {
+            return Component.translatable("reprise.editor.key.hover", Timecode.precise(key.tick)).getString();
+        }
+        if (!project().freezes.isEmpty()) {
+            return Component.translatable("reprise.editor.shot_world_time", Timecode.precise(hover), Timecode.precise(project().worldTick(hover))).getString();
+        }
+        return Timecode.precise(hover);
     }
 
     @Override
@@ -424,6 +521,13 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (menu != null) {
+            // A click anywhere closes the menu; one inside it also chooses.
+            var open = menu;
+            menu = null;
+            if (open.click(event.x(), event.y())) updateLabels();
+            return true;
+        }
         if (choosingRange) return true;
         if (dragging != null) finishDrag();
         if (super.mouseClicked(event, doubleClick)) {
@@ -431,6 +535,14 @@ public final class EditorScreen extends Screen {
         }
         if (!this.timeline.contains(event.x(), event.y())) {
             return false;
+        }
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            Boolean edge = timeline.rangeHandleAt(session, event.x(), event.y());
+            if (edge != null) {
+                project().checkpoint();
+                draggingRangeEdge = edge;
+                return true;
+            }
         }
         if (event.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             if (doubleClick) {
@@ -497,6 +609,12 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (draggingRangeEdge != null) {
+            int tick = (int) Math.round(timeline.tickAt(event.x(), session.duration()));
+            if (draggingRangeEdge) project().exportStart = Math.clamp(tick, 0, Math.max(0, project().end(session.duration()) - 1));
+            else project().exportEnd = Math.clamp(tick, project().start() + 1, session.duration());
+            return true;
+        }
         if (choosingRange) {
             updateRangePreview(event.x());
             return true;
@@ -524,6 +642,11 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (draggingRangeEdge != null) {
+            draggingRangeEdge = null;
+            project().save();
+            return true;
+        }
         if (choosingRange) {
             if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                 updateRangePreview(event.x());
@@ -589,7 +712,6 @@ public final class EditorScreen extends Screen {
             selection.clear();
             this.dragging = null;
             this.session.refreshEnvironment();
-            layoutToolbar();
             updateLabels();
         }
     }
@@ -612,6 +734,18 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (menu != null) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) menu = null;
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_LEFT_BRACKET) {
+            setRange(true);
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_RIGHT_BRACKET) {
+            setRange(false);
+            return true;
+        }
         if (choosingRange) {
             if (event.key() == GLFW.GLFW_KEY_ESCAPE) cancelRange();
             return true;

@@ -16,16 +16,30 @@ public final class MenuButtons {
     public static void register(IEventBus bus) {
         bus.addListener(ScreenEvent.Init.Post.class, e -> {
             if (e.getScreen() instanceof TitleScreen title) {
+                RecordingControls.recoverInBackground();
                 int x = title.width / 2 + 104;
                 int y = title.height / 4 + 48;
                 e.addListener(Button.builder(Component.translatable("reprise.menu.replays"), b -> title.getMinecraft().setScreen(new ReplayBrowserScreen(title)))
                     .bounds(x, y, 60, 20).tooltip(Tooltip.create(Component.translatable("reprise.menu.replays.tooltip"))).build());
             } else if (e.getScreen() instanceof PauseScreen pause && !ReplaySession.isActive() && pause.showsPauseMenu()) {
-                Component label = Component.translatable(Recorder.isRecording() ? "reprise.menu.stop_recording" : "reprise.menu.start_recording");
-                e.addListener(Button.builder(label, b -> {
-                    RecordingControls.toggle();
-                    pause.onClose();
-                }).bounds(4, pause.height - 24, 110, 20).build());
+                // Bottom left, out of the way of the vanilla menu: start, or pause and stop.
+                int y = pause.height - 24;
+                Recorder recorder = Recorder.active();
+                if (recorder == null) {
+                    e.addListener(Button.builder(Component.translatable("reprise.menu.start_recording"), b -> {
+                        RecordingControls.toggle();
+                        pause.onClose();
+                    }).bounds(4, y, 110, 20).build());
+                } else {
+                    e.addListener(Button.builder(Component.translatable(recorder.isPaused() ? "reprise.menu.resume_recording" : "reprise.menu.pause_recording"), b -> {
+                        recorder.setPaused(!recorder.isPaused());
+                        pause.onClose();
+                    }).bounds(4, y, 80, 20).tooltip(Tooltip.create(Component.translatable("reprise.menu.pause_recording.tooltip"))).build());
+                    e.addListener(Button.builder(Component.translatable("reprise.menu.stop_recording"), b -> {
+                        RecordingControls.toggle();
+                        pause.onClose();
+                    }).bounds(88, y, 96, 20).tooltip(Tooltip.create(Component.translatable("reprise.menu.stop_recording.tooltip"))).build());
+                }
             }
         });
     }

@@ -1,0 +1,23 @@
+gui 0
+replay latest
+wait 120
+replay seek 40
+replay editor
+wait 10
+shot e01_empty
+replay camera 4 72 -6 -20 25
+replay keyframe
+replay seek 140
+replay camera 8 74 -2 30 30
+replay keyframe
+wait 5
+shot e02_keys
+press More
+wait 5
+shot e03_more
+key escape
+wait 3
+replay close
+wait 5
+shot e04_hud
+quit

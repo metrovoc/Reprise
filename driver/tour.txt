@@ -1,0 +1,50 @@
+# A walk through every screen, as a player sees it.
+gui 0
+wait 40
+shot t01_title
+press Replays
+wait 10
+shot t02_browser
+inspect
+replay latest
+wait 120
+shot t03_replay_start
+replay play
+wait 40
+shot t04_playing
+key escape
+wait 5
+shot t05_pause
+key escape
+wait 5
+replay editor
+wait 10
+shot t06_editor
+inspect
+press Entities
+wait 10
+shot t07_entities
+key escape
+wait 5
+press Environment
+wait 10
+shot t08_environment
+key escape
+wait 5
+press Camera shake
+wait 10
+shot t09_shake
+key escape
+wait 5
+press Audio cues
+wait 10
+shot t10_audio
+key escape
+wait 5
+press Export
+wait 10
+shot t11_export
+inspect
+key escape
+wait 5
+quit

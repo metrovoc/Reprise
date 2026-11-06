@@ -1,0 +1,6 @@
+gui 0
+wait 30
+press Replays
+wait 20
+shot b01_library
+quit
