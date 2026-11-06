@@ -33,7 +33,11 @@ Flashback editor projects, optional sub-tick camera samples, and wall-clock timi
 
 ## Watching
 
-Open **Replays** on the title screen and pick a recording to watch. To play two recordings back to back,
+Open **Replays** on the title screen and pick a recording to watch. Search by filename, recording name,
+world or server, or Minecraft version. Sort by date, name, or duration. **Rename** changes the filename.
+**Move to Trash** takes a recording out of the library. Open **Trash** to restore it with its camera work
+and queued shots, or delete the recording permanently. Restoring uses a numbered filename if needed.
+To play two recordings back to back,
 select the first, choose **Join recordings…**, then select the second and confirm. Reprise creates a new
 recording with its own editor project. Markers from both recordings appear on the combined timeline.
 

@@ -83,6 +83,20 @@ public final class RepriseSteps {
             throw new IllegalStateException("No field named " + parts[0]);
         });
         Driver.STEPS.put("drop", (mc, name) -> mc.screen.onFilesDrop(java.util.List.of(mc.gameDirectory.toPath().resolve(name))));
+        Driver.STEPS.put("row_order", (mc, expected) -> {
+            for (var widget : mc.screen.children()) {
+                if (widget instanceof net.minecraft.client.gui.components.ObjectSelectionList<?> list) {
+                    var actual = list.children().stream().map(row -> row.getNarration().getString()).toList();
+                    var names = expected.isBlank() ? java.util.List.<String>of() : java.util.List.of(expected.split(","));
+                    if (actual.size() != names.size()) throw new IllegalStateException("Unexpected rows: " + actual);
+                    for (int i = 0; i < actual.size(); i++) {
+                        if (!actual.get(i).startsWith(names.get(i))) throw new IllegalStateException("Unexpected rows: " + actual);
+                    }
+                    return;
+                }
+            }
+            throw new IllegalStateException("No visible list");
+        });
         Driver.STEPS.put("row", (mc, name) -> {
             for (var widget : mc.screen.children()) {
                 if (widget instanceof net.minecraft.client.gui.components.ObjectSelectionList<?> list) {

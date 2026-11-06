@@ -25,6 +25,10 @@ public final class ReprisePaths {
         return dir(root().resolve("projects"));
     }
 
+    public static Path trash() {
+        return dir(root().resolve("trash"));
+    }
+
     public static Path exports() {
         return dir(root().resolve("exports"));
     }
