@@ -29,13 +29,12 @@ final class LegacyRegistries {
 
     // ReplayStudio allocates from frame lengths. Validate the entire stream before giving it the input.
     void scan(DataInputStream in, long remaining) throws IOException {
-        int previous = 0;
         long configBytes = 0;
         boolean config = false, play = false;
         while (remaining > 0) {
             int time = in.readInt(), size = in.readInt();
             remaining -= 8;
-            ReplayModImport.checkFrame(time, previous, size, remaining);
+            ReplayModImport.checkFrame(time, size, remaining);
             if (!play && (configBytes += size + 8L) > MAX_CONFIG_BYTES) throw new IOException("Replay configuration exceeds 64 MiB");
             if (size > 0 && !play) {
                 int id = in.readUnsignedByte();
@@ -55,7 +54,6 @@ final class LegacyRegistries {
                 in.skipNBytes(size);
             }
             remaining -= size;
-            previous = time;
         }
         if (!play) throw new IOException("Recording contains no completed configuration");
     }
@@ -78,23 +76,38 @@ final class LegacyRegistries {
         var prefix = new ByteArrayOutputStream();
         var out = new DataOutputStream(prefix);
         boolean config = false;
+        var tags = new LegacyEnchantmentTags();
         while (true) {
             int time = in.readInt(), size = in.readInt();
             byte[] bytes = in.readNBytes(size);
             int id = size == 0 ? -1 : Byte.toUnsignedInt(bytes[0]);
-            if (config && (id == REGISTRY || id == KNOWN_PACKS)) {
+            if (config && (id == REGISTRY || id == KNOWN_PACKS || id == LegacyEnchantmentTags.UPDATE_TAGS)) {
                 var body = new FriendlyByteBuf(Unpooled.wrappedBuffer(bytes, 1, size - 1));
                 try {
-                    if (id == KNOWN_PACKS) {
+                    if (id == LegacyEnchantmentTags.UPDATE_TAGS) {
+                        tags.record(body);
+                    } else if (id == KNOWN_PACKS) {
                         core = ClientboundSelectKnownPacks.STREAM_CODEC.decode(body).knownPacks().stream()
                             .anyMatch(pack -> pack.isVanilla() && pack.id().equals("core")
                                 && (pack.version().equals("1.21") || pack.version().equals("1.21.1")));
                     } else {
                         var packet = ClientboundRegistryDataPacket.STREAM_CODEC.decode(body);
-                        if (packet.entries().stream().anyMatch(entry -> entry.data().isEmpty())) bytes = expandRegistry(packet);
+                        if (packet.entries().stream().anyMatch(entry -> entry.data().isEmpty())) {
+                            packet = expandRegistry(packet);
+                            bytes = encodeRegistry(packet);
+                        }
+                        tags.inspect(packet);
                     }
                 } finally {
                     body.release();
+                }
+            }
+            if (config && id == CONFIG_FINISH) {
+                byte[] supplement = tags.missingBindings();
+                if (supplement != null) {
+                    out.writeInt(time);
+                    out.writeInt(supplement.length);
+                    out.write(supplement);
                 }
             }
             if ((long) prefix.size() + bytes.length + 8 > MAX_CONFIG_BYTES) throw new IOException("Expanded configuration exceeds 64 MiB");
@@ -107,7 +120,7 @@ final class LegacyRegistries {
         return new SequenceInputStream(new ByteArrayInputStream(prefix.toByteArray()), in);
     }
 
-    private byte[] expandRegistry(ClientboundRegistryDataPacket packet) throws IOException {
+    private ClientboundRegistryDataPacket expandRegistry(ClientboundRegistryDataPacket packet) throws IOException {
         if (core && vanilla == null) {
             try (var data = LegacyRegistries.class.getResourceAsStream("registry-767.nbt.gz")) {
                 if (data == null) throw new IOException("Missing bundled protocol 767 registry data");
@@ -129,10 +142,14 @@ final class LegacyRegistries {
             if (value == null) throw new IOException("Recording omits the known-pack value for " + registry + " / " + key);
             entries.add(new PackedRegistryEntry(entry.id(), Optional.of(value)));
         }
+        return new ClientboundRegistryDataPacket(packet.registry(), entries);
+    }
+
+    private static byte[] encodeRegistry(ClientboundRegistryDataPacket packet) {
         var out = new FriendlyByteBuf(Unpooled.buffer(256, MAX_CONFIG_BYTES));
         try {
             out.writeVarInt(REGISTRY);
-            ClientboundRegistryDataPacket.STREAM_CODEC.encode(out, new ClientboundRegistryDataPacket(packet.registry(), entries));
+            ClientboundRegistryDataPacket.STREAM_CODEC.encode(out, packet);
             byte[] bytes = new byte[out.readableBytes()];
             out.readBytes(bytes);
             return bytes;

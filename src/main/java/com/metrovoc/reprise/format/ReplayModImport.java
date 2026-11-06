@@ -112,14 +112,15 @@ public final class ReplayModImport {
                 Path timeline = Files.createTempFile(destination, ".timeline-", ".part");
                 try {
                     try (var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)))) {
+                        var writer = new PacketWriter(data, out, meta, segment, packs);
                         if (legacy) {
-                            LegacyMcpr.read(zip, packets, destination, (input, size) ->
-                                readPackets(input, size, data, out, meta, segment, duration, packs));
+                            LegacyMcpr.read(zip, packets, writer);
                         } else {
                             try (var input = new DataInputStream(new BufferedInputStream(zip.getInputStream(packets)))) {
-                                readPackets(input, packets.getSize(), data, out, meta, segment, duration, packs);
+                                readPackets(input, packets.getSize(), writer);
                             }
                         }
+                        writer.finish(duration);
                     }
                     out.putNextEntry(new ZipEntry(segment.file));
                     Files.copy(timeline, out);
@@ -133,35 +134,57 @@ public final class ReplayModImport {
         }
     }
 
-    static void checkFrame(int time, int previous, int size, long remaining) throws IOException {
-        if (time < previous || size < 0 || size > remaining || size > 64 * 1024 * 1024) {
+    static void checkFrame(int time, int size, long remaining) throws IOException {
+        if (time < 0 || size < 0 || size > remaining || size > 64 * 1024 * 1024) {
             throw new IOException("Invalid ReplayMod packet header at " + time + " ms");
         }
     }
 
-    private static void readPackets(DataInputStream in, long remaining, DataOutputStream out, ZipOutputStream zip, ReplayMeta meta,
-                                    ReplayMeta.Segment segment, int duration, Map<String, String> packs) throws IOException {
-        Map<PacketType<?>, Integer> loginIds = new HashMap<>(), configIds = new HashMap<>(), ids = new HashMap<>();
-        LoginProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(loginIds::put);
-        ConfigurationProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(configIds::put);
-        GameProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(ids::put);
-        out.writeInt(Actions.MAGIC);
-        out.writeInt(Actions.VERSION);
-        var chunks = new DataOutputStream(new BufferedOutputStream(zip));
-        Phase phase = Phase.LOGIN;
-        boolean joined = false;
-        int recorderId = -1, spawnTick = -1, terrainTick = -1;
-        int previous = 0;
+    private static void readPackets(DataInputStream in, long remaining, PacketWriter writer) throws IOException {
         while (remaining > 0) {
             int time = in.readInt();
             int size = in.readInt();
             remaining -= 8;
-            checkFrame(time, previous, size, remaining);
-            previous = time;
-            if (size == 0) continue;
+            checkFrame(time, size, remaining);
             byte[] bytes = new byte[size];
             in.readFully(bytes);
             remaining -= size;
+            writer.accept(time, bytes);
+        }
+    }
+
+    static final class PacketWriter {
+        private final DataOutputStream out, chunks;
+        private final ZipOutputStream zip;
+        private final ReplayMeta meta;
+        private final ReplayMeta.Segment segment;
+        private final Map<String, String> packs;
+        private final Map<PacketType<?>, Integer> loginIds = new HashMap<>(), configIds = new HashMap<>(), ids = new HashMap<>();
+        private Phase phase = Phase.LOGIN;
+        private boolean joined;
+        private int recorderId = -1, spawnTick = -1, terrainTick = -1, previous;
+
+        PacketWriter(DataOutputStream out, ZipOutputStream zip, ReplayMeta meta, ReplayMeta.Segment segment,
+                     Map<String, String> packs) throws IOException {
+            this.out = out;
+            this.zip = zip;
+            this.meta = meta;
+            this.segment = segment;
+            this.packs = packs;
+            this.chunks = new DataOutputStream(new BufferedOutputStream(zip));
+            LoginProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(loginIds::put);
+            ConfigurationProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(configIds::put);
+            GameProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(ids::put);
+            out.writeInt(Actions.MAGIC);
+            out.writeInt(Actions.VERSION);
+        }
+
+        void accept(int time, byte[] bytes) throws IOException {
+            // ReplayMod delivers packets in file order. A late packet whose time has passed is due immediately.
+            time = Math.max(time, previous);
+            previous = time;
+            int size = bytes.length;
+            if (size == 0) return;
             var body = ByteBuffer.wrap(bytes);
             int id = Varints.read(body);
             if (phase == Phase.LOGIN) {
@@ -176,14 +199,14 @@ public final class ReplayModImport {
                     }
                     phase = Phase.CONFIGURATION;
                 }
-                continue;
+                return;
             }
             // ReplayMod rewrites pack URLs to its own archive-local scheme.
             var phaseIds = phase == Phase.PLAY ? ids : configIds;
             if (id == phaseIds.get(CommonPacketTypes.CLIENTBOUND_RESOURCE_PACK_PUSH)) {
                 var packet = PacketCodecs.decode(ClientboundResourcePackPushPacket.STREAM_CODEC, body);
                 String hash = packs.get(packet.url());
-                if (hash == null) continue; // ReplayMod omits the index entry for a declined or failed pack.
+                if (hash == null) return; // ReplayMod omits the index entry for a declined or failed pack.
                 var local = new ClientboundResourcePackPushPacket(packet.id(), EmbeddedPacks.URL_PREFIX + hash,
                     hash, packet.required(), packet.prompt());
                 byte[] payload = PacketCodecs.encode(ClientboundResourcePackPushPacket.STREAM_CODEC, local);
@@ -209,7 +232,7 @@ public final class ReplayModImport {
                     chunks.write(bytes);
                     out.writeByte(Actions.CHUNK_REF);
                     Varints.write(out, meta.chunkCount++);
-                    continue;
+                    return;
                 }
                 if (id == ids.get(GamePacketTypes.CLIENTBOUND_LEVEL_PARTICLES)) {
                     bytes = vanillaBlockParticle(bytes, body);
@@ -230,12 +253,15 @@ public final class ReplayModImport {
             }
             if (out.size() == Integer.MAX_VALUE) throw new IOException("Recording exceeds the supported segment size");
         }
-        chunks.flush();
-        if (!joined) throw new IOException("ReplayMod recording contains no world login");
-        if (segment.actionsOffset == 0) endSnapshot(out, segment);
-        advance(out, segment, tickAt(Math.max(duration, previous)));
-        meta.durationTicks = segment.ticks;
-        meta.openingTick = Math.max(0, Math.max(spawnTick, terrainTick));
+
+        void finish(int duration) throws IOException {
+            chunks.flush();
+            if (!joined) throw new IOException("ReplayMod recording contains no world login");
+            if (segment.actionsOffset == 0) endSnapshot(out, segment);
+            advance(out, segment, tickAt(Math.max(duration, previous)));
+            meta.durationTicks = segment.ticks;
+            meta.openingTick = Math.max(0, Math.max(spawnTick, terrainTick));
+        }
     }
 
     /** Fabric API can append a block position to block particles for tinting. Re-emit the vanilla wire form. */
