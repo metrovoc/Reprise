@@ -273,6 +273,38 @@ public final class Driver {
                 return true;
             }
         }
+        // A locked macOS session can omit all monitors from GLFW while AppKit retains their geometry.
+        if (org.lwjgl.system.Platform.get() == org.lwjgl.system.Platform.MACOSX) {
+            try {
+                var query = new ProcessBuilder("/usr/bin/osascript", "-l", "JavaScript", "-e", """
+                    ObjC.import('AppKit')
+                    function run(args) {
+                        const screens = ObjC.unwrap($.NSScreen.screens);
+                        const target = screens.find(s => ObjC.unwrap(s.localizedName) === args[0]);
+                        if (!target) return '';
+                        const f = target.frame;
+                        return [f.origin.x, screens[0].frame.size.height - f.origin.y - f.size.height,
+                                f.size.width, f.size.height].join(' ');
+                    }
+                    """, name).start();
+                try (var coords = new java.util.Scanner(query.getInputStream())) {
+                    if (query.waitFor() == 0 && coords.hasNextInt()) {
+                        int left = coords.nextInt(), top = coords.nextInt(), width = coords.nextInt(), height = coords.nextInt();
+                        long window = mc.getWindow().handle();
+                        GLFW.glfwSetWindowSize(window, Math.min(1500, width - 64), Math.min(900, height - 96));
+                        GLFW.glfwSetWindowPos(window, left + 32, top + 64);
+                        int[] x = new int[1], y = new int[1];
+                        GLFW.glfwGetWindowPos(window, x, y);
+                        if (x[0] == left + 32 && y[0] == top + 64) {
+                            LOG.info("[driver] positioned on {} via AppKit at {},{}", name, x[0], y[0]);
+                            return true;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("[driver] AppKit placement failed", e);
+            }
+        }
         LOG.error("[driver] no monitor named {}", name);
         LOG.info("[driver] done: 1 step(s) failed");
         return false;
