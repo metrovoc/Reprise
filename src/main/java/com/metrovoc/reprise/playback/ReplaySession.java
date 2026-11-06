@@ -388,27 +388,11 @@ public final class ReplaySession {
             return;
         }
         try {
-            this.reader = this.file.segment(next);
+            this.reader = this.file.segmentActions(next);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         this.segment = next;
-        // Continuing from the previous segment: the client already has this state.
-        skipSnapshot();
-    }
-
-    private void skipSnapshot() {
-        while (this.reader.hasRemaining()) {
-            int action = this.reader.get();
-            switch (action) {
-                case Actions.SNAPSHOT_END -> {
-                    return;
-                }
-                case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> readBytes();
-                case Actions.CHUNK_REF -> Varints.read(this.reader);
-                default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");
-            }
-        }
     }
 
     private byte[] readBytes() {

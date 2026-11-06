@@ -78,7 +78,7 @@ public final class ReplayPacker {
             java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(data);
             int ticks = 0;
             int goodEnd = -1;
-            boolean snapshotDone = false;
+            int actionsOffset = 0;
             try {
                 buf.getInt();
                 buf.getInt();
@@ -86,7 +86,7 @@ public final class ReplayPacker {
                     int action = buf.get();
                     switch (action) {
                         case Actions.TICK -> ticks++;
-                        case Actions.SNAPSHOT_END -> snapshotDone = true;
+                        case Actions.SNAPSHOT_END -> actionsOffset = buf.position();
                         case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
                             int len = Varints.read(buf);
                             if (len > buf.remaining()) {
@@ -104,7 +104,7 @@ public final class ReplayPacker {
             } catch (java.nio.BufferUnderflowException | IllegalStateException truncated) {
                 // The tail was being written when the game stopped.
             }
-            if (!snapshotDone) {
+            if (actionsOffset == 0) {
                 Files.delete(file);
                 break;
             }
@@ -112,6 +112,7 @@ public final class ReplayPacker {
                 Files.write(file, java.util.Arrays.copyOf(data, goodEnd));
             }
             ReplayMeta.Segment segment = new ReplayMeta.Segment(Actions.segmentFile(i), meta.durationTicks, i == 0 || (i < written.size() && written.get(i).reset));
+            segment.actionsOffset = actionsOffset;
             segment.ticks = ticks;
             meta.segments.add(segment);
             meta.durationTicks += ticks;

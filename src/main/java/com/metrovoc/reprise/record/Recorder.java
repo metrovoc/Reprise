@@ -5,6 +5,7 @@ import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.format.ReplayMeta;
 import io.netty.buffer.ByteBuf;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -73,7 +74,7 @@ public final class Recorder {
         this.meta.recorderName = this.minecraft.getUser().getName();
         this.meta.recorderUuid = this.minecraft.getUser().getProfileId().toString();
         ModList.get().getMods().forEach(mod -> this.meta.mods.put(mod.getModId(), mod.getVersion().toString()));
-        Path dir = ReprisePaths.recordings().resolve(stamp);
+        Path dir = Files.createTempDirectory(ReprisePaths.recordings(), stamp + "-");
         this.writer = new ReplayWriter(dir, this.meta);
     }
 
@@ -107,6 +108,13 @@ public final class Recorder {
         }
         active = null;
         recorder.writer.close();
+        if (recorder.writer.failure() != null) {
+            Reprise.LOGGER.error("Recording stopped after a write error; recoverable data stays in {}", recorder.writer.dir());
+            if (recorder.minecraft.player != null) {
+                recorder.minecraft.player.sendSystemMessage(Component.translatable("reprise.recording.write_failed"));
+            }
+            return null;
+        }
         try {
             Path file = ReplayPacker.pack(recorder.writer.dir(), recorder.meta.name);
             Reprise.LOGGER.info("Saved replay {}", file);

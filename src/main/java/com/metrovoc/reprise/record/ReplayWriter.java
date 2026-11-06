@@ -56,11 +56,12 @@ public final class ReplayWriter {
     /** Runs {@code task} on the writer thread, in submission order. Blocks if the writer is far behind. */
     public void submit(Consumer<ReplayWriter> task) {
         if (this.failure != null) {
-            throw new IllegalStateException("Replay writer failed", this.failure);
+            return; // endTick stops the recording and reports the failure
         }
         try {
             this.tasks.put(task);
         } catch (InterruptedException e) {
+            this.failure = e;
             Thread.currentThread().interrupt();
         }
     }
@@ -73,31 +74,45 @@ public final class ReplayWriter {
                     task.accept(this);
                 }
             } catch (InterruptedException e) {
+                recordFailure(e);
                 break;
             } catch (Throwable t) {
-                Reprise.LOGGER.error("Replay writer failed", t);
-                this.failure = t;
+                recordFailure(t);
+            }
+        }
+        try (var segmentStream = this.segment; var chunks = this.chunkOut) {
+            // Closing both streams flushes any recoverable prefix, including after a failed task.
+        } catch (IOException e) {
+            recordFailure(e);
+        }
+        if (this.failure == null) {
+            try {
+                writeMeta();
+            } catch (RuntimeException e) {
+                recordFailure(e);
             }
         }
     }
 
-    /** Finishes all queued work, closes the files and writes the final metadata. */
+    private void recordFailure(Throwable cause) {
+        Reprise.LOGGER.error("Replay writer failed", cause);
+        if (this.failure == null) {
+            this.failure = cause;
+        }
+    }
+
+    /** Drains the queue and waits until files have closed, including after a disk error. */
     public void close() {
-        submit(w -> {
-            try {
-                w.closeSegment();
-                if (w.chunkOut != null) {
-                    w.chunkOut.close();
-                }
-                w.writeMeta();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
         this.running = false;
-        try {
-            this.thread.join();
-        } catch (InterruptedException e) {
+        boolean interrupted = false;
+        while (this.thread.isAlive()) {
+            try {
+                this.thread.join();
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
             Thread.currentThread().interrupt();
         }
     }
@@ -126,7 +141,6 @@ public final class ReplayWriter {
         if (this.segment != null) {
             this.segment.close();
             this.segment = null;
-            writeMeta();
         }
     }
 
@@ -168,6 +182,13 @@ public final class ReplayWriter {
 
     public void snapshotEnd() {
         action(Actions.SNAPSHOT_END, null);
+        this.currentSegment.actionsOffset = this.segment.size();
+        try {
+            this.segment.flush();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        writeMeta();
     }
 
     public void tick() {

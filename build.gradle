@@ -172,5 +172,7 @@ idea {
 }
 
 tasks.named('test', Test).configure {
+    workingDir = temporaryDir
+    classpath += sourceSets.main.runtimeClasspath
     useJUnitPlatform()
 }

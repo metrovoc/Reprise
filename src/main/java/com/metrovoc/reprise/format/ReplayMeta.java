@@ -35,6 +35,8 @@ public final class ReplayMeta {
 
     public static final class Segment {
         public String file;
+        /** Byte position immediately after SNAPSHOT_END, or zero in older recordings. */
+        public int actionsOffset;
         public int startTick;
         public int ticks;
         /** The client state does not carry over from the previous segment (server switch): always run the snapshot. */

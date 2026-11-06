@@ -83,6 +83,33 @@ public final class ReplayFile implements Closeable {
         return buf;
     }
 
+    /** Opens the tick stream when continuing into a segment whose snapshot is already represented in the client. */
+    public ByteBuffer segmentActions(int index) throws IOException {
+        ByteBuffer buf = segment(index);
+        int offset = this.meta.segments.get(index).actionsOffset;
+        if (offset != 0) {
+            if (offset <= buf.position() || offset > buf.limit() || buf.get(offset - 1) != Actions.SNAPSHOT_END) {
+                throw new IOException("Invalid snapshot offset in segment " + index);
+            }
+            return buf.position(offset);
+        }
+        while (buf.hasRemaining()) {
+            switch (buf.get()) {
+                case Actions.SNAPSHOT_END -> { return buf; }
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
+                    int length = Varints.read(buf);
+                    if (length < 0 || length > buf.remaining()) {
+                        throw new IOException("Invalid snapshot packet length in segment " + index);
+                    }
+                    buf.position(buf.position() + length);
+                }
+                case Actions.CHUNK_REF -> Varints.read(buf);
+                default -> throw new IOException("Unexpected snapshot action in segment " + index);
+            }
+        }
+        throw new IOException("Missing snapshot end in segment " + index);
+    }
+
     /** An encoded chunk packet from the chunk cache. */
     public synchronized byte[] chunk(int index) throws IOException {
         int fileIndex = index / Actions.CHUNKS_PER_FILE;

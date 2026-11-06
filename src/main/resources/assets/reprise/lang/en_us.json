@@ -87,6 +87,7 @@
   "reprise.recording.paused": "Recording paused",
   "reprise.recording.resumed": "Recording resumed",
   "reprise.recording.marker": "Marker added",
+  "reprise.recording.write_failed": "Recording stopped after a write error. Open Replays to recover saved footage.",
   "reprise.recording.saved": "Replay saved: %s",
   "reprise.menu.replays": "Replays",
   "reprise.menu.replays.tooltip": "Watch and edit your recordings",
