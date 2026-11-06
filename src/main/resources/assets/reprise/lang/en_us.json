@@ -54,6 +54,8 @@
   "reprise.editor.pick_block": "Use aimed block",
   "reprise.editor.more_turns": "+1 turn",
   "reprise.editor.fewer_turns": "−1 turn",
+  "reprise.interpolation.spectator": "Spectate",
+  "reprise.editor.target.spectate": "Spectate %s · %s",
   "reprise.editor.target.aim": "Aim at %s · %s",
   "reprise.editor.target.follow": "Follow %s · %s",
   "reprise.editor.target.orbit": "Orbit %s · %s · extra turns: %s",

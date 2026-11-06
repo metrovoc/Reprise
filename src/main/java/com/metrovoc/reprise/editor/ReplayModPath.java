@@ -9,8 +9,8 @@ import java.util.List;
 /** Converts ReplayMod's separate millisecond time and camera tracks to editable replay-tick keys. */
 final class ReplayModPath {
     private record Clock(double time, double replay) {}
-    private record Pose(double time, double[] values) {}
-    private record Curve(Pose a, Pose b, double[] left, double[] right, boolean linear) {
+    private record Pose(double time, double[] values, Integer spectator) {}
+    private record Curve(Pose a, Pose b, double[] left, double[] right, boolean linear, boolean spectating) {
         double[] at(double time) {
             double u = (time - a.time) / (b.time - a.time);
             double[] result = new double[6];
@@ -41,7 +41,7 @@ final class ReplayModPath {
             var a = clock.get(i - 1);
             var b = clock.get(i);
             require(b.time > a.time && b.replay > a.replay, "Frozen or reversed time segments cannot be imported.");
-            require(type(timing, i - 1, "timestamp").getAsString().equals("linear"), "Unsupported time interpolation.");
+            require(type(interpolator(timing, i - 1), "timestamp").getAsString().equals("linear"), "Unsupported time interpolation.");
             var speed = new SpeedKey(a.replay / 50, (b.replay - a.replay) / (b.time - a.time));
             require(speed.speed >= 0.001, "Time segment is below the minimum replay speed.");
             speed.hold = true;
@@ -56,13 +56,13 @@ final class ReplayModPath {
         for (var entry : camera.getAsJsonArray("keyframes")) {
             var key = entry.getAsJsonObject();
             var props = key.getAsJsonObject("properties");
-            require(!props.has("spectate"), "Entity spectator paths cannot be imported.");
+            Integer spectator = props.has("spectate") ? props.get("spectate").getAsInt() : null;
             double[] values = new double[6];
             for (int i = 0; i < values.length; i++) {
                 values[i] = props.getAsJsonArray(i < 3 ? "camera:position" : "camera:rotation").get(i % 3).getAsDouble();
                 require(Double.isFinite(values[i]), "Invalid camera coordinate.");
             }
-            var pose = new Pose(key.get("time").getAsLong(), values);
+            var pose = new Pose(key.get("time").getAsLong(), values, spectator);
             if (!poses.isEmpty()) {
                 var previous = poses.getLast();
                 require(pose.time > previous.time, "Camera keys must be in time order.");
@@ -87,6 +87,7 @@ final class ReplayModPath {
         }
         double lastCameraTick = 0;
         int clockIndex = 0;
+        Curve previous = null;
         for (var curve : curves(camera, poses)) {
             double left = curve.a.time;
             while (left < curve.b.time) {
@@ -96,18 +97,29 @@ final class ReplayModPath {
                 double right = Math.min(curve.b.time, b.time);
                 double slope = (b.replay - a.replay) / (b.time - a.time);
                 double tick = (a.replay + (left - a.time) * slope) / 50;
-                keys.add(cameraKey(curve, left, right, tick, fov));
+                var key = cameraKey(curve, left, right, tick, fov);
+                key.spectatorAfterKey = curve.spectating ? curve.a.spectator : null;
+                // ReplayStudio gives the preceding segment ownership of a shared endpoint.
+                boolean spectatorAtStart = left == curve.a.time && previous != null ? previous.spectating : curve.spectating;
+                key.spectatorAtKey = spectatorAtStart ? curve.a.spectator : null;
+                keys.add(key);
                 left = right;
                 lastCameraTick = (a.replay + (right - a.time) * slope) / 50;
             }
+            previous = curve;
         }
-        keys.add(key(lastCameraTick, poses.getLast().values, fov));
+        var last = key(lastCameraTick, poses.getLast().values, fov);
+        if (previous.spectating) last.spectatorAtKey = last.spectatorAfterKey = previous.b.spectator;
+        keys.add(last);
     }
 
-    private static JsonElement type(JsonObject path, int index, String... required) {
+    private static JsonObject interpolator(JsonObject path, int index) {
         var segment = path.getAsJsonArray("segments").get(index);
         require(!segment.isJsonNull(), "An unconnected path segment cannot be imported.");
-        var interpolator = path.getAsJsonArray("interpolators").get(segment.getAsInt()).getAsJsonObject();
+        return path.getAsJsonArray("interpolators").get(segment.getAsInt()).getAsJsonObject();
+    }
+
+    private static JsonElement type(JsonObject interpolator, String... required) {
         var properties = interpolator.getAsJsonArray("properties");
         for (String name : required) require(properties.contains(new com.google.gson.JsonPrimitive(name)), "Missing interpolation for " + name);
         return interpolator.get("type");
@@ -118,11 +130,15 @@ final class ReplayModPath {
         var segments = path.getAsJsonArray("segments");
         require(segments.size() == poses.size() - 1, "Incomplete camera track.");
         double[] velocity = new double[6], acceleration = new double[6];
+        boolean hasCameraDerivatives = false;
         for (int first = 0; first < segments.size();) {
             int limit = first + 1;
             while (limit < segments.size() && segments.get(limit).equals(segments.get(first))) limit++;
-            var spec = type(path, first, "camera:position", "camera:rotation");
+            var interpolator = interpolator(path, first);
+            boolean spectating = interpolator.getAsJsonArray("properties").contains(new com.google.gson.JsonPrimitive("spectate"));
+            var spec = spectating ? interpolator.get("type") : type(interpolator, "camera:position", "camera:rotation");
             String name = spec.isJsonObject() ? spec.getAsJsonObject().get("type").getAsString() : spec.getAsString();
+            require(!spectating || name.equals("linear"), "Unsupported spectator interpolation.");
             var knots = poses.subList(first, limit + 1);
             double[][] second = null;
             double alpha = 0;
@@ -132,12 +148,13 @@ final class ReplayModPath {
                     alpha = spec.getAsJsonObject().get("alpha").getAsDouble();
                     require(Double.isFinite(alpha), "Invalid Catmull–Rom tension.");
                 }
-                case "cubic-spline" -> { if (first == 0) second = naturalSpline(knots); }
+                case "cubic-spline" -> { if (!hasCameraDerivatives) second = naturalSpline(knots); }
                 default -> throw new IllegalArgumentException("Unsupported camera interpolation: " + name);
             }
             for (int i = 0; i + 1 < knots.size(); i++) {
                 var a = knots.get(i);
                 var b = knots.get(i + 1);
+                require(!spectating || (a.spectator != null && b.spectator != null), "Missing spectator entity.");
                 double[] left = new double[6], right = new double[6];
                 double seconds = (b.time - a.time) / 1000;
                 for (int c = 0; c < 6; c++) {
@@ -162,8 +179,9 @@ final class ReplayModPath {
                     velocity[c] = name.equals("linear") ? 1 : right[c] / unit;
                     acceleration[c] = name.equals("linear") ? 0 : (2 * left[c] + 4 * right[c] - 6 * delta) / (unit * unit);
                 }
-                result.add(new Curve(a, b, left, right, name.equals("linear")));
+                result.add(new Curve(a, b, left, right, name.equals("linear"), spectating));
             }
+            hasCameraDerivatives = !spectating;
             first = limit;
         }
         return result;

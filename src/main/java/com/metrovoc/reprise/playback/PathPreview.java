@@ -31,7 +31,7 @@ public final class PathPreview {
         int perSegment = Math.max(1, 2000 / Math.max(1, keys.size() - 1));
         for (int i = 0; i + 1 < keys.size(); i++) {
             Keyframe a = keys.get(i), b = keys.get(i + 1);
-            if (a.interpolation == Keyframe.Interpolation.HOLD) {
+            if (a.interpolation == Keyframe.Interpolation.HOLD || a.spectatorAfterKey != null) {
                 continue;
             }
             int samples = a.interpolation == Keyframe.Interpolation.SMOOTH ? 32 : 1;

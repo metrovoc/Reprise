@@ -27,6 +27,15 @@ public final class Keyframe {
             return a + s * (b - a) + s * (1 - s) * ((1 - s) * startOffset[channel] + s * endOffset[channel]);
         }
     }
+    /** Recorded entity viewed exactly at this key, and during the interval after it. Null selects the camera pose. */
+    public Integer spectatorAtKey, spectatorAfterKey;
+
+    public static Integer spectatorAt(java.util.List<Keyframe> keys, double tick) {
+        var key = keys.get(PathInterpolator.segmentAt(keys, tick));
+        if (tick < key.tick) return null;
+        return tick == key.tick ? key.spectatorAtKey : key.spectatorAfterKey;
+    }
+
     public Spline spline;
     public Target target;
     /** Extra full revolutions from this orbit key to the next. */
@@ -42,6 +51,8 @@ public final class Keyframe {
 
     public Keyframe copy() {
         Keyframe k = new Keyframe();
+        k.spectatorAtKey = spectatorAtKey;
+        k.spectatorAfterKey = spectatorAfterKey;
         k.spline = this.spline;
         k.target = this.target;
         k.turns = this.turns;

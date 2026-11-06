@@ -176,6 +176,7 @@ public final class PlaybackControls {
             }
             if (mc.getCameraEntity() != mc.player && mc.options.keyShift.isDown()) {
                 Entity target = mc.getCameraEntity();
+                if (CameraPath.ownsView()) CameraPath.setPreview(false);
                 session.stopSpectating();
                 if (target != null) {
                     mc.player.snapTo(target.getX(), target.getEyeY() - mc.player.getEyeHeight(), target.getZ(), target.getYRot(), target.getXRot());

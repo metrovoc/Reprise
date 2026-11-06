@@ -18,6 +18,7 @@ public final class CameraPath {
     private static boolean preview;
     private static boolean forced;
     private static CameraPose current;
+    private static Entity pathView;
 
     public static boolean preview() {
         return preview;
@@ -25,18 +26,31 @@ public final class CameraPath {
 
     public static void setPreview(boolean value) {
         preview = value;
+        if (!forced && !preview) releaseView();
     }
 
     /** Export drives the path regardless of the preview toggle. */
     public static void setForced(boolean value) {
         forced = value;
+        if (!forced && !preview) releaseView();
+    }
+
+    private static void releaseView() {
+        if (pathView == null) return;
+        var mc = Minecraft.getInstance();
+        if (mc.getCameraEntity() == pathView) mc.setCameraEntity(mc.player);
+        pathView = null;
+    }
+
+    public static boolean ownsView() {
+        return pathView != null && Minecraft.getInstance().getCameraEntity() == pathView;
     }
 
     public static boolean isDriving() {
         ReplaySession session = ReplaySession.active();
         Minecraft mc = Minecraft.getInstance();
         return session != null && mc.level != null && mc.player != null && !session.project().keyframes.isEmpty()
-            && mc.getCameraEntity() == mc.player && (forced || preview);
+            && (mc.getCameraEntity() == mc.player || ownsView()) && (forced || preview);
     }
 
     /** The pose applied this frame, for roll and field of view; null when the path is not driving. */
@@ -46,10 +60,34 @@ public final class CameraPath {
 
     public static void frame(double tick, float partialTick) {
         if (!isDriving()) {
+            releaseView();
             current = null;
             return;
         }
-        ReplayProject project = ReplaySession.active().project();
+        var session = ReplaySession.active();
+        ReplayProject project = session.project();
+        Integer id = Keyframe.spectatorAt(project.keyframes, tick);
+        if (id != null) {
+            var mc = Minecraft.getInstance();
+            Entity entity = mc.level.getEntity(id.intValue());
+            if (entity != null && entity != mc.player) {
+                if (mc.getCameraEntity() != entity) {
+                    mc.setCameraEntity(entity);
+                    PovHands.snap();
+                }
+                pathView = entity;
+                // Keep the detached camera where the actor was last seen if it disappears.
+                var eye = entity.getEyePosition(partialTick);
+                mc.player.snapTo(eye.x, eye.y - mc.player.getEyeHeight(), eye.z,
+                    entity.getViewYRot(partialTick), entity.getViewXRot(partialTick));
+                mc.player.setOldPosAndRot();
+            } else {
+                releaseView();
+            }
+            current = null;
+            return;
+        }
+        releaseView();
         current = evaluate(project.keyframes, tick, partialTick);
         apply(current);
     }

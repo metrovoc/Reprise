@@ -198,9 +198,13 @@ public final class EditorScreen extends Screen {
         this.fewerTurns.visible = this.moreTurns.visible = this.selected != null && this.selected.target != null
             && this.selected.target.mode() == Keyframe.Tracking.ORBIT;
         this.interpolationButton.active = this.selected != null;
-        this.interpolationButton.setMessage(this.selected != null && this.selected.spline != null
-            ? Component.translatable("reprise.interpolation.spline") : Component.translatable("reprise.interpolation." +
-            (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));
+        if (this.selected != null && this.selected.spectatorAfterKey != null) {
+            this.interpolationButton.setMessage(Component.translatable("reprise.interpolation.spectator"));
+        } else {
+            this.interpolationButton.setMessage(this.selected != null && this.selected.spline != null
+                ? Component.translatable("reprise.interpolation.spline") : Component.translatable("reprise.interpolation." +
+                (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));
+        }
     }
 
     @Override
@@ -242,7 +246,15 @@ public final class EditorScreen extends Screen {
             project().checkpoint();
             Keyframe.Interpolation[] values = Keyframe.Interpolation.values();
             this.selected.spline = null;
-            this.selected.interpolation = values[(this.selected.interpolation.ordinal() + 1) % values.length];
+            if (this.selected.spectatorAfterKey != null) {
+                this.selected.spectatorAfterKey = null;
+                this.selected.interpolation = Keyframe.Interpolation.LINEAR;
+                int index = project().keyframes.indexOf(this.selected);
+                if (index + 1 < project().keyframes.size()) project().keyframes.get(index + 1).spectatorAtKey = null;
+                if (index == 0) this.selected.spectatorAtKey = null;
+            } else {
+                this.selected.interpolation = values[(this.selected.interpolation.ordinal() + 1) % values.length];
+            }
             project().save();
         }
     }
@@ -289,6 +301,11 @@ public final class EditorScreen extends Screen {
                 };
                 info = Component.translatable("reprise.editor.target." + kind, this.selected.target.name(),
                     Timecode.precise(this.selected.tick), this.selected.turns).getString();
+            }
+            if (this.selected.spectatorAfterKey != null) {
+                var actor = minecraft.level.getEntity(this.selected.spectatorAfterKey.intValue());
+                String name = actor == null ? "#" + this.selected.spectatorAfterKey : actor.getName().getString();
+                info = Component.translatable("reprise.editor.target.spectate", name, Timecode.precise(this.selected.tick)).getString();
             }
             g.text(this.font, info, 10, top + INFO_Y, 0xFFFFC94D);
         }
