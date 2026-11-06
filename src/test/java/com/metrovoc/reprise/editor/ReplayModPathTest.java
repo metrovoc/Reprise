@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReplayModPathTest {
+    private static final CameraPose INITIAL = new CameraPose(42, 104, -7, 15, 5, 2, 85);
+
     private static JsonArray shot() {
         return JsonParser.parseString("""
             [
@@ -22,7 +24,7 @@ class ReplayModPathTest {
     }
 
     @Test void aClockChangeSplitsTheCurveWithoutChangingItsShape() {
-        var path = new ReplayModPath(shot(), 40, 85);
+        var path = new ReplayModPath(shot(), 40, INITIAL);
         assertEquals(10, path.start);
         assertEquals(28, path.end);
         assertEquals(3, path.keys.size());
@@ -41,10 +43,26 @@ class ReplayModPathTest {
         }
     }
 
+    @Test void shorterCameraTrackHoldsTheIncomingAndFinalPoses() {
+        var tracks = shot();
+        var positions = tracks.get(1).getAsJsonObject().getAsJsonArray("keyframes");
+        positions.get(0).getAsJsonObject().addProperty("time", 400);
+        positions.get(1).getAsJsonObject().addProperty("time", 800);
+        var path = new ReplayModPath(tracks, 40, INITIAL);
+        assertEquals(3, path.keys.size());
+        assertEquals(10, path.start);
+        assertEquals(28, path.end);
+        assertEquals(INITIAL, PathInterpolator.evaluate(path.keys, 21.49));
+        assertEquals(0, PathInterpolator.evaluate(path.keys, 21.5).x());
+        assertEquals(5, PathInterpolator.evaluate(path.keys, 23.5).x(), 1e-10);
+        assertEquals(10, PathInterpolator.evaluate(path.keys, 25.5).x());
+        assertEquals(10, PathInterpolator.evaluate(path.keys, 27.5).x());
+    }
+
     @Test void aFreezeCannotSilentlyCollapseCameraMovementIntoOneReplayTick() {
         var tracks = shot();
         tracks.get(0).getAsJsonObject().getAsJsonArray("keyframes").get(1)
             .getAsJsonObject().getAsJsonObject("properties").addProperty("timestamp", 500);
-        assertThrows(IllegalArgumentException.class, () -> new ReplayModPath(tracks, 40, 70));
+        assertThrows(IllegalArgumentException.class, () -> new ReplayModPath(tracks, 40, INITIAL));
     }
 }

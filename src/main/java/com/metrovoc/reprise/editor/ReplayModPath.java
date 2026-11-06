@@ -27,7 +27,8 @@ final class ReplayModPath {
     final List<SpeedKey> speeds = new ArrayList<>();
     final int start, end;
 
-    ReplayModPath(JsonArray tracks, int duration, float fov) {
+    ReplayModPath(JsonArray tracks, int duration, CameraPose initial) {
+        float fov = initial.fov();
         require(tracks.size() == 2, "Expected a time track and a camera track.");
         var timing = tracks.get(0).getAsJsonObject();
         var clock = new ArrayList<Clock>();
@@ -75,12 +76,21 @@ final class ReplayModPath {
             poses.add(pose);
         }
         require(poses.size() >= 2, "This path needs at least two camera keys.");
-        require(poses.getFirst().time == clock.getFirst().time && poses.getLast().time == clock.getLast().time,
-            "Time and camera tracks must share their first and last path times.");
+        require(poses.getFirst().time >= clock.getFirst().time && poses.getLast().time <= clock.getLast().time,
+            "Camera movement outside the time track requires a frozen replay clock.");
+        if (poses.getFirst().time > clock.getFirst().time) {
+            // ReplayMod does not move the camera until its first position key.
+            var lead = key(clock.getFirst().replay / 50, new double[]{initial.x(), initial.y(), initial.z(),
+                initial.yaw(), initial.pitch(), initial.roll()}, fov);
+            lead.interpolation = Keyframe.Interpolation.HOLD;
+            keys.add(lead);
+        }
+        double lastCameraTick = 0;
         int clockIndex = 0;
         for (var curve : curves(camera, poses)) {
             double left = curve.a.time;
             while (left < curve.b.time) {
+                while (clock.get(clockIndex + 1).time <= left) clockIndex++;
                 var a = clock.get(clockIndex);
                 var b = clock.get(clockIndex + 1);
                 double right = Math.min(curve.b.time, b.time);
@@ -88,10 +98,10 @@ final class ReplayModPath {
                 double tick = (a.replay + (left - a.time) * slope) / 50;
                 keys.add(cameraKey(curve, left, right, tick, fov));
                 left = right;
-                if (right == b.time) clockIndex++;
+                lastCameraTick = (a.replay + (right - a.time) * slope) / 50;
             }
         }
-        keys.add(key(clock.getLast().replay / 50, poses.getLast().values, fov));
+        keys.add(key(lastCameraTick, poses.getLast().values, fov));
     }
 
     private static JsonElement type(JsonObject path, int index, String... required) {

@@ -43,8 +43,9 @@ If the recording contains a ReplayMod path library, open **Editor → ReplayMod 
 or a named shot. Loading it replaces the camera keys, speed keys, and export range in one undoable edit.
 Linear, cubic spline, and Catmull–Rom segments retain their position, rotation, roll, and timing. Reprise
 adds a camera key where a time-speed change splits a segment and uses your current FOV. Import supports
-free-camera shots whose time and camera tracks start and end together and whose replay time advances
-throughout. The export range rounds outward to whole replay ticks.
+free-camera shots whose time track advances throughout and covers the camera movement. If the camera starts
+later, the shot holds your viewpoint at import until the first camera key. After the last camera key, the
+world continues playing from that viewpoint. The export range rounds outward to whole replay ticks.
 
 ## Watching
 

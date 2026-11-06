@@ -53,7 +53,13 @@ final class ReplayModPathsScreen extends Screen {
     private void load(String name) {
         ReplayModPath path;
         try {
-            path = new ReplayModPath(paths.getAsJsonArray(name), session.duration(), minecraft.options.fov().get());
+            var camera = minecraft.gameRenderer.getMainCamera();
+            var entity = minecraft.getCameraEntity();
+            var current = CameraPath.current();
+            float roll = current == null ? com.metrovoc.reprise.playback.CameraController.roll() : current.roll();
+            var initial = new CameraPose(entity.getX(), entity.getY(), entity.getZ(), camera.yRot(), camera.xRot(),
+                roll, minecraft.options.fov().get());
+            path = new ReplayModPath(paths.getAsJsonArray(name), session.duration(), initial);
         } catch (RuntimeException e) {
             minecraft.setScreen(new AlertScreen(() -> minecraft.setScreen(this),
                 Component.translatable("reprise.editor.path_failed"), Component.literal(String.valueOf(e.getMessage()))));
