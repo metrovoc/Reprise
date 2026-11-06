@@ -1,0 +1,16 @@
+replay latest
+wait 100
+replay spectate
+replay seek 21
+wait 3
+shot pov_play_0
+replay seek 22
+replay play
+wait 1
+shot pov_play_swing
+replay pause
+replay seek 75
+wait 3
+shot pov_play_sword
+replay state
+quit

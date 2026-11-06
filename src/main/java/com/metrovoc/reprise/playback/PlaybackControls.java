@@ -138,6 +138,7 @@ public final class PlaybackControls {
         }
         CameraPath.frame(session.visualTick(partialTick));
         CameraController.frame();
+        PathPreview.emit(session);
     }
 
     public static boolean handleKey(ReplaySession session, KeyEvent event) {

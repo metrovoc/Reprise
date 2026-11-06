@@ -12,7 +12,9 @@
     "export.DeltaTrackerTimerMixin",
     "export.WindowMixin",
     "export.GameRendererMixin",
-    "playback.RenderSectionMixin"
+    "playback.RenderSectionMixin",
+    "playback.HandRenderingMixin",
+    "playback.ItemInHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

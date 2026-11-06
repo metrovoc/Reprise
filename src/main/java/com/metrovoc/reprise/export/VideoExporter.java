@@ -37,7 +37,7 @@ public final class VideoExporter {
     private final ReplaySession session;
     private final ExportSettings settings;
     private final int start, end, width, height;
-    private final double ticksPerFrame;
+    private final double[] frameTicks;
     private final int totalFrames;
     private final Path output;
     private final Screen returnTo;
@@ -51,6 +51,7 @@ public final class VideoExporter {
     private int warmup = WARMUP_FRAMES;
     private int waited;
     private int stableFrames;
+    private int neededTick;
     private int lastVisible = -1;
     private boolean captureThisFrame;
     private boolean progressFrame;
@@ -72,8 +73,8 @@ public final class VideoExporter {
         this.end = session.project().end(session.duration());
         this.width = settings.width & ~1;
         this.height = settings.height & ~1;
-        this.ticksPerFrame = 20.0 / settings.fps;
-        this.totalFrames = Math.max(1, (int) Math.floor((this.end - this.start) / this.ticksPerFrame) + 1);
+        this.frameTicks = session.project().frameTicks(this.start, this.end, settings.fps);
+        this.totalFrames = this.frameTicks.length;
 
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         String base = session.file().path().getFileName().toString().replaceFirst("\\.reprise$", "") + "_" + stamp;
@@ -185,10 +186,11 @@ public final class VideoExporter {
         if (!this.session.isPlaying()) {
             this.session.setPlaying(true);
         }
-        double target = this.start + this.frame * this.ticksPerFrame;
+        double target = this.frameTicks[this.frame];
         int needTick = (int) Math.floor(target) + 1;
         int ticks = Math.max(0, needTick - this.session.tick());
         partial[0] = (float) (target - Math.floor(target));
+        this.neededTick = needTick;
         this.captureThisFrame = true;
         return ticks;
     }
@@ -223,7 +225,7 @@ public final class VideoExporter {
     }
 
     private float currentPartial() {
-        double target = this.start + Math.max(0, this.frame - 1) * this.ticksPerFrame;
+        double target = this.frameTicks[Math.max(0, Math.min(this.totalFrames - 1, this.frame - 1))];
         return (float) (target - Math.floor(target));
     }
 
@@ -233,6 +235,10 @@ public final class VideoExporter {
             return;
         }
         this.captureThisFrame = false;
+        if (this.session.tick() < this.neededTick && this.session.tick() < this.session.duration()) {
+            // The game runs at most 10 ticks per frame; a fast timelapse needs more frames to catch up.
+            return;
+        }
         if (!worldReady() && this.waited < MAX_WAIT_FRAMES) {
             // Render this moment again once the chunks in view are built.
             this.waited++;

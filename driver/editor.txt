@@ -1,0 +1,24 @@
+replay latest
+wait 120
+gui 2
+replay clear
+replay seek 60
+replay camera -4 70 -6 -20 25
+replay keyframe
+replay seek 160
+replay camera 6 72 -4 30 30
+replay keyframe
+replay seek 260
+replay camera 10 74 6 100 35
+replay keyframe
+replay seek 200
+replay camera 0 80 -14 10 30
+replay editor
+wait 20
+hover 400 200
+shot editor_path
+replay close
+replay export 1280 720 30
+wait 600
+replay state
+quit

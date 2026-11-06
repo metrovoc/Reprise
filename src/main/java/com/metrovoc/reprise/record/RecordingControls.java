@@ -17,6 +17,7 @@ public final class RecordingControls {
 
     public static void register(IEventBus bus) {
         bus.addListener(ClientTickEvent.Post.class, e -> tick());
+        bus.addListener(net.neoforged.neoforge.client.event.RenderGuiEvent.Post.class, e -> RecordingIndicator.draw(e.getGuiGraphics()));
         bus.addListener(ClientPlayerNetworkEvent.LoggingIn.class, e -> {
             if (ReplaySession.active() != null) {
                 return;

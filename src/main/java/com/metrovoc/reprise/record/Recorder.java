@@ -50,6 +50,7 @@ public final class Recorder {
     private boolean configuring;
     private int failedEncodes;
     private int segmentTicks;
+    private int recordedTicks;
 
     private Recorder(ClientPacketListener connection) throws IOException {
         this.connectionType = connection.getConnectionType();
@@ -113,6 +114,11 @@ public final class Recorder {
             Reprise.LOGGER.error("Could not save replay; the recording stays in {}", recorder.writer.dir(), e);
             return null;
         }
+    }
+
+    /** Ticks recorded so far, counted on the game thread. */
+    public int recordedTicks() {
+        return this.recordedTicks;
     }
 
     public Path directory() {
@@ -292,6 +298,7 @@ public final class Recorder {
         }
         this.self.tick();
         this.writer.submit(ReplayWriter::tick);
+        this.recordedTicks++;
         if (++this.segmentTicks >= SEGMENT_TICKS) {
             this.snapshotPending = true;
         }

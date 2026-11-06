@@ -15,6 +15,7 @@ public final class Timeline {
     public static final int PLAYHEAD = 0xFFFFFFFF;
     public static final int KEYFRAME = 0xFFFFC94D;
     public static final int KEYFRAME_SELECTED = 0xFFFF7A3D;
+    public static final int SPEED = 0xFF4DD0E1;
 
     public int x, y, width, height;
 
@@ -78,6 +79,12 @@ public final class Timeline {
             int kx = xOf(k.tick, duration);
             diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : KEYFRAME, k.interpolation == Keyframe.Interpolation.HOLD);
         }
+        for (com.metrovoc.reprise.editor.SpeedKey key : project.speedKeys) {
+            int sx = xOf(key.tick, duration);
+            g.fill(sx - 2, trackBottom - 4, sx + 3, trackBottom - 3, SPEED);
+            g.fill(sx - 1, trackBottom - 3, sx + 2, trackBottom - 2, SPEED);
+            g.fill(sx, trackBottom - 2, sx + 1, trackBottom - 1, SPEED);
+        }
         g.fill(px, trackTop - 1, px + 1, trackBottom + 1, PLAYHEAD);
     }
 
@@ -90,6 +97,29 @@ public final class Timeline {
             g.fill(cx - i, cy - 3 + i, cx + i + 1, cy - 2 + i, color);
             g.fill(cx - i, cy + 3 - i, cx + i + 1, cy + 4 - i, color);
         }
+    }
+
+    public com.metrovoc.reprise.editor.SpeedKey speedKeyAt(ReplaySession session, double mx, double my) {
+        int duration = Math.max(1, session.duration());
+        if (my < this.y + this.height - 6) {
+            return null;
+        }
+        for (var key : session.project().speedKeys) {
+            if (Math.abs(xOf(key.tick, duration) - mx) <= 3) {
+                return key;
+            }
+        }
+        return null;
+    }
+
+    public ReplayMeta.Marker markerAt(ReplaySession session, double mx) {
+        int duration = Math.max(1, session.duration());
+        for (ReplayMeta.Marker marker : session.meta().markers) {
+            if (Math.abs(xOf(marker.tick, duration) - mx) <= 2) {
+                return marker;
+            }
+        }
+        return null;
     }
 
     public Keyframe keyframeAt(ReplaySession session, double mx, double my) {

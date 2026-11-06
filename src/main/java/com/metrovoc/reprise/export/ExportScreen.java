@@ -92,7 +92,7 @@ public final class ExportScreen extends Screen {
         g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 96, 0xFFFFFFFF);
         ReplayProject project = this.session.project();
         int start = project.start(), end = project.end(this.session.duration());
-        int frames = (int) Math.floor((end - start) / (20.0 / this.settings.fps)) + 1;
+        int frames = project.frameTicks(start, end, this.settings.fps).length;
         String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end), frames).getString();
         g.centeredText(this.font, range, this.width / 2, this.height / 2 + 28, 0xFFB0B0B8);
         String camera = project.keyframes.isEmpty() ? Component.translatable("reprise.export.no_keyframes").getString()

@@ -249,7 +249,9 @@ public final class ReplaySession {
 
     /** Milliseconds per client tick while this replay plays. */
     public float millisPerTick() {
-        return 50.0F / this.speed;
+        // The path preview plays as the export will: at the speed keys' speed.
+        double speed = CameraPath.preview() && !this.project.speedKeys.isEmpty() ? this.project.speedAt(this.tick) : this.speed;
+        return (float) (50.0 / Math.max(0.01, speed));
     }
 
     /** Moves to {@code target} (in recorded ticks), keeping the camera where it is. */
@@ -294,6 +296,7 @@ public final class ReplaySession {
                 }
             }
         }
+        PovHands.snap();
     }
 
     private boolean resetBetween(int from, int to) {

@@ -14,6 +14,7 @@ import java.util.List;
 /** What a user builds on top of a replay: the camera path and export settings. Saved per replay. */
 public final class ReplayProject {
     public List<Keyframe> keyframes = new ArrayList<>();
+    public List<SpeedKey> speedKeys = new ArrayList<>();
     /** The part of the replay to export, in ticks; -1 for the whole replay. */
     public int exportStart = -1;
     public int exportEnd = -1;
@@ -35,6 +36,9 @@ public final class ReplayProject {
         }
         if (project == null) {
             project = new ReplayProject();
+        }
+        if (project.speedKeys == null) {
+            project.speedKeys = new ArrayList<>();
         }
         if (project.export == null) {
             project.export = new ExportSettings();
@@ -76,6 +80,7 @@ public final class ReplayProject {
         to.add(ReplayMeta.GSON.toJson(this));
         ReplayProject state = ReplayMeta.GSON.fromJson(from.remove(from.size() - 1), ReplayProject.class);
         this.keyframes = state.keyframes;
+        this.speedKeys = state.speedKeys == null ? new ArrayList<>() : state.speedKeys;
         this.exportStart = state.exportStart;
         this.exportEnd = state.exportEnd;
         this.export = state.export;
@@ -85,6 +90,46 @@ public final class ReplayProject {
 
     public void sort() {
         this.keyframes.sort(Comparator.comparingDouble(k -> k.tick));
+        this.speedKeys.sort(Comparator.comparingDouble(k -> k.tick));
+    }
+
+    /** The speed curve at a replay tick; 1 when there are no speed keys. */
+    public double speedAt(double tick) {
+        List<SpeedKey> keys = this.speedKeys;
+        if (keys.isEmpty()) {
+            return 1;
+        }
+        if (tick <= keys.get(0).tick) {
+            return keys.get(0).speed;
+        }
+        for (int i = 0; i < keys.size() - 1; i++) {
+            SpeedKey a = keys.get(i), b = keys.get(i + 1);
+            if (tick < b.tick) {
+                double f = (tick - a.tick) / Math.max(1e-9, b.tick - a.tick);
+                return a.speed + (b.speed - a.speed) * f;
+            }
+        }
+        return keys.get(keys.size() - 1).speed;
+    }
+
+    /**
+     * The replay tick of every video frame from {@code start} to {@code end}, following the speed curve.
+     * Integrates with the midpoint rule, which keeps ramps accurate to a fraction of a tick.
+     */
+    public double[] frameTicks(int start, int end, int fps) {
+        double step = 20.0 / fps;
+        List<Double> out = new ArrayList<>();
+        double t = start;
+        while (t <= end + 1e-9 && out.size() < 10_000_000) {
+            out.add(t);
+            double mid = t + 0.5 * step * speedAt(t);
+            t += step * Math.max(0.001, speedAt(mid));
+        }
+        double[] ticks = new double[out.size()];
+        for (int i = 0; i < ticks.length; i++) {
+            ticks[i] = out.get(i);
+        }
+        return ticks;
     }
 
     public int start() {

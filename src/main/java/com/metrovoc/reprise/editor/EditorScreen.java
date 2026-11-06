@@ -51,7 +51,7 @@ public final class EditorScreen extends Screen {
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
-        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 60};
+        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 60, 50};
         int gaps = 2 * (widths.length + 2) + 12;
         int total = gaps;
         for (int w : widths) {
@@ -81,6 +81,9 @@ public final class EditorScreen extends Screen {
         x += w[5] + 2;
         addRenderableWidget(Button.builder(Component.translatable("reprise.editor.delete"), b -> deleteSelected()).bounds(x, y, w[6], 20).build());
         x += w[6] + 2;
+        addRenderableWidget(Button.builder(Component.translatable("reprise.editor.speed_key"), b -> addSpeedKey()).bounds(x, y, w[12], 20)
+            .tooltip(Tooltip.create(Component.translatable("reprise.editor.speed_key.tooltip"))).build());
+        x += w[12] + 2;
         this.pathButton = addRenderableWidget(Button.builder(Component.empty(), b -> CameraPath.setPreview(!CameraPath.preview())).bounds(x, y, w[7], 20)
             .tooltip(Tooltip.create(Component.translatable("reprise.editor.path.tooltip"))).build());
         x += w[7] + 2;
@@ -122,6 +125,16 @@ public final class EditorScreen extends Screen {
         PlaybackControls.addKeyframe(this.session);
         double tick = this.session.visualTick(0);
         this.selected = project().keyframes.stream().filter(k -> Math.abs(k.tick - tick) < 0.5).findFirst().orElse(null);
+    }
+
+    private void addSpeedKey() {
+        project().checkpoint();
+        int tick = this.session.tick();
+        project().speedKeys.removeIf(k -> Math.abs(k.tick - tick) < 0.5);
+        project().speedKeys.add(new SpeedKey(tick, this.session.speed()));
+        project().sort();
+        project().save();
+        this.session.setSpeed(1);
     }
 
     private void deleteSelected() {
@@ -180,7 +193,15 @@ public final class EditorScreen extends Screen {
         }
         if (this.timeline.contains(mouseX, mouseY)) {
             double hover = this.timeline.tickAt(mouseX, this.session.duration());
-            g.setTooltipForNextFrame(Component.literal(Timecode.precise(hover)), mouseX, mouseY);
+            String tip = Timecode.precise(hover);
+            SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
+            var marker = this.timeline.markerAt(this.session, mouseX);
+            if (speed != null) {
+                tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed(speed.speed)).getString();
+            } else if (marker != null) {
+                tip = Component.translatable("reprise.editor.marker.hover", marker.name.isEmpty() ? Timecode.precise(marker.tick) : marker.name).getString();
+            }
+            g.setTooltipForNextFrame(Component.literal(tip), mouseX, mouseY);
         }
     }
 
@@ -192,7 +213,21 @@ public final class EditorScreen extends Screen {
         if (!this.timeline.contains(event.x(), event.y())) {
             return false;
         }
+        SpeedKey speedHit = this.timeline.speedKeyAt(this.session, event.x(), event.y());
+        if (speedHit != null && event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            project().checkpoint();
+            project().speedKeys.remove(speedHit);
+            project().save();
+            return true;
+        }
         Keyframe hit = this.timeline.keyframeAt(this.session, event.x(), event.y());
+        if (hit == null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            var marker = this.timeline.markerAt(this.session, event.x());
+            if (marker != null && doubleClick) {
+                this.session.seek(marker.tick);
+                return true;
+            }
+        }
         if (event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             if (hit != null) {
                 this.selected = hit;
