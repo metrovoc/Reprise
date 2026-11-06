@@ -224,7 +224,12 @@ public final class VideoExporter {
                 exporter.audio.start();
             }
             session.setPlaying(false);
-            session.seek(exporter.start);
+            double startWorld = session.project().worldTick(exporter.start);
+            // A shot may start midway through a world tick (a fractional freeze). Rebuild from
+            // its preceding whole tick so its future terrain has not been applied by the seek.
+            int seekTick = startWorld == Math.floor(startWorld) ? exporter.start
+                : (int) session.project().shotTick(Math.floor(startWorld));
+            session.seek(seekTick);
             CameraPath.setForced(true);
             exporter.mc.setScreen(new ExportProgressScreen(exporter));
             exporter.mc.resizeGui();
@@ -337,6 +342,10 @@ public final class VideoExporter {
             this.session.setPlaying(true);
         }
         double target = shotTick();
+        if (session.advanceExportTerrain((int) Math.floor(session.project().worldTick(target)))) {
+            this.stableFrames = 0;
+            this.waited = 0;
+        }
         int needTick = target >= this.session.duration() ? this.session.duration() : (int) target + 1;
         // Vanilla interpolates toward the next tick. Its entities and terrain belong to a
         // different world at a hard cut, so hold the outgoing world's final pose until then.
@@ -344,6 +353,7 @@ public final class VideoExporter {
         if (cut != null && cut <= needTick) needTick = (int) target;
         this.session.skipFrozenTicks(needTick);
         int ticks = Math.max(0, needTick - this.session.tick());
+        if (ticks > 1) this.stableFrames = 0; // Skipped ticks can apply terrain directly.
         partial[0] = (float) Math.min(1, target - needTick + 1);
         this.neededTick = needTick;
         this.captureThisFrame = true;
@@ -355,14 +365,21 @@ public final class VideoExporter {
         var renderer = this.mc.levelRenderer;
         if (this.sodium) {
             // Sodium owns the terrain queues and implements this query against its chunk builder.
-            return renderer.hasRenderedAllSections();
+            if (!renderer.hasRenderedAllSections()) {
+                this.stableFrames = 0;
+                return false;
+            }
+            return ++this.stableFrames >= 2;
         }
         var dispatcher = renderer.getSectionRenderDispatcher();
         if (dispatcher == null) {
             return true;
         }
         var graph = renderer.sectionOcclusionGraph;
-        if (!dispatcher.isQueueEmpty() || graph.needsFullUpdate || graph.fullUpdateTask != null && !graph.fullUpdateTask.isDone()) {
+        // Workers remove tasks from the queue before compiling them. A borrowed buffer
+        // means a mesh can still change after this render.
+        boolean compiling = mc.renderBuffers().sectionBufferPool().freeBuffers.remainingCapacity() > 0;
+        if (compiling || !dispatcher.isQueueEmpty() || graph.needsFullUpdate || graph.fullUpdateTask != null && !graph.fullUpdateTask.isDone()) {
             this.stableFrames = 0;
             return false;
         }
@@ -677,6 +694,7 @@ public final class VideoExporter {
             this.downsampled.destroyBuffers();
         }
         running = null;
+        if (showResult) this.session.advanceExportTerrain(Integer.MAX_VALUE);
         restore();
         Component message = ok ? Component.translatable("reprise.export.done", output.getFileName().toString())
             : failure != null ? failure : Component.translatable("reprise.export.failed", "ffmpeg");

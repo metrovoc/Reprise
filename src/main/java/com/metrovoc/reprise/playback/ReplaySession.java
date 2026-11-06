@@ -112,6 +112,7 @@ public final class ReplaySession {
     private ByteBuffer reader;
     /** Recorded ticks applied so far: the replay's current time. */
     private int tick;
+    private final ExportTerrainClock terrainClock = new ExportTerrainClock();
     private int shotOffset;
     private List<ReplayProject.Freeze> currentFreezes;
 
@@ -230,6 +231,7 @@ public final class ReplaySession {
         }
         com.metrovoc.reprise.export.VideoExporter.sessionClosed(this);
         active = null;
+        terrainClock.discard();
         skyLightCache.clear();
         CameraPath.setPreview(false);
         this.project.save();
@@ -495,6 +497,10 @@ public final class ReplaySession {
         }
     }
 
+    public boolean advanceExportTerrain(int recordedTick) {
+        return terrainClock.advance(recordedTick);
+    }
+
     private void readUntilTick() {
         while (true) {
             if (this.reader == null || !this.reader.hasRemaining()) {
@@ -517,10 +523,25 @@ public final class ReplaySession {
                     applyResetsAtCurrentTick();
                     return;
                 }
-                case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
+                case Actions.GAME_PACKET -> {
+                    byte[] bytes = readBytes();
+                    if (terrainClock.ahead(tick + 1) && terrainClock.shouldHold(bytes)) {
+                        terrainClock.hold(tick + 1, () -> deliverGame(ByteBuffer.wrap(bytes)));
+                    } else {
+                        deliverGame(ByteBuffer.wrap(bytes));
+                    }
+                }
                 case Actions.POV_SAMPLES, Actions.PACKED_POV -> readPov(action);
-                case Actions.CHUNK_REF -> deliverChunk(Varints.read(this.reader));
-                case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
+                case Actions.CHUNK_REF -> {
+                    int index = Varints.read(reader);
+                    if (terrainClock.ahead(tick + 1)) terrainClock.hold(tick + 1, () -> deliverChunk(index));
+                    else deliverChunk(index);
+                }
+                case Actions.CONFIG_PACKET -> {
+                    byte[] bytes = readBytes();
+                    if (terrainClock.ahead(tick + 1)) terrainClock.holdConfiguration(tick + 1, () -> deliverConfiguration(bytes));
+                    else deliverConfiguration(bytes);
+                }
                 case Actions.SNAPSHOT_END -> { }
                 default -> throw new IllegalStateException("Unknown action " + action + " in segment " + this.segment);
             }
