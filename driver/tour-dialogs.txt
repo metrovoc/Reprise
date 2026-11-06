@@ -1,0 +1,38 @@
+gui 0
+replay latest
+wait 120
+replay seek 60
+replay editor
+wait 5
+press More
+menu Time and weather
+wait 5
+shot d01_scene_recorded
+press Fixed
+wait 5
+press Dusk
+wait 10
+shot d02_scene_fixed
+press Changing
+wait 5
+shot d03_scene_changing
+key escape
+wait 3
+press More
+menu Camera shake
+wait 5
+press Handheld
+wait 3
+press Custom
+wait 3
+shot d04_shake
+key escape
+wait 3
+press More
+menu Players and mobs
+wait 10
+shot d05_entities
+key escape
+wait 3
+shot d06_editor_lanes
+quit

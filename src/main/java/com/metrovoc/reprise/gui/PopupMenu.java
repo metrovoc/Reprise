@@ -82,6 +82,17 @@ public final class PopupMenu {
         }
     }
 
+    /** Runs the first enabled item whose label starts with {@code prefix}; used by scripted tests. */
+    public boolean choose(String prefix) {
+        for (Object e : entries) {
+            if (e instanceof Item item && item.enabled && item.label.getString().startsWith(prefix)) {
+                item.action.run();
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Runs the item under the pointer; returns true when the click landed in the menu. */
     public boolean click(double mx, double my) {
         if (!contains(mx, my)) return false;

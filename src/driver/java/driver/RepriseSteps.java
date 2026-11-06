@@ -137,6 +137,9 @@ public final class RepriseSteps {
             net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
             new net.minecraft.client.multiplayer.ServerData("Test", arg, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null));
         Driver.STEPS.put("disconnect", (mc, arg) -> mc.disconnectFromWorld(net.minecraft.network.chat.Component.literal("bye")));
+        Driver.STEPS.put("menu", (mc, arg) -> {
+            if (!(mc.screen instanceof EditorScreen editor) || !editor.chooseMenuItem(arg)) throw new IllegalStateException("no menu item " + arg);
+        });
         Driver.STEPS.put("replay", (mc, arg) -> {
             String[] a = arg.split(" ");
             ReplaySession s = ReplaySession.active();

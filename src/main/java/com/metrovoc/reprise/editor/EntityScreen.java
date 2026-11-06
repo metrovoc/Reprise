@@ -111,8 +111,22 @@ final class EntityScreen extends Screen {
         this.list.setScrollAmount(0);
         names.entrySet().stream()
             .filter(e -> displayName(e.getKey(), e.getValue()).toLowerCase(Locale.ROOT).contains(needle) || e.getKey().toString().contains(needle))
-            .sorted(Map.Entry.<UUID, String>comparingByValue(String.CASE_INSENSITIVE_ORDER).thenComparing(Map.Entry.comparingByKey()))
+            .sorted(byRelevance().thenComparing(Map.Entry.<UUID, String>comparingByValue(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(Map.Entry.comparingByKey()))
             .forEach(entry -> this.list.append(entry.getKey(), entry.getValue()));
+    }
+
+    /** Players first, then whatever is nearest the camera; entities outside the loaded area last. */
+    private java.util.Comparator<Map.Entry<UUID, String>> byRelevance() {
+        Map<UUID, Entity> loaded = new java.util.HashMap<>();
+        for (Entity e : this.minecraft.level.entitiesForRendering()) loaded.put(e.getUUID(), e);
+        Entity camera = this.minecraft.getCameraEntity();
+        return java.util.Comparator.<Map.Entry<UUID, String>>comparingInt(e ->
+                loaded.get(e.getKey()) instanceof net.minecraft.world.entity.player.Player ? 0 : 1)
+            .thenComparingDouble(e -> {
+                Entity entity = loaded.get(e.getKey());
+                return entity == null || camera == null ? Double.MAX_VALUE : entity.distanceToSqr(camera);
+            });
     }
 
     private String displayName(UUID id, String name) {

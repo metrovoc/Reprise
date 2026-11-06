@@ -288,6 +288,13 @@ public final class EditorScreen extends Screen {
         openMenu(m, moreButton);
     }
 
+    /** Chooses an item of the open menu by the start of its label; for scripted tests. */
+    public boolean chooseMenuItem(String prefix) {
+        var open = menu;
+        menu = null;
+        return open != null && open.choose(prefix);
+    }
+
     // Edits
 
     private void saveClip() {
