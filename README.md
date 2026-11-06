@@ -44,8 +44,9 @@ Flashback editor projects, optional sub-tick camera samples, and wall-clock timi
 library to translate the packets locally. Mod-specific data needs compatible registries and client mods.
 [Download the converter from ReplayMod’s release page.](https://modrinth.com/mod/replaymod/version/5LxshONI)
 
-Recorded packets and markers use the 20-tick timeline. Playback opens when the recording player and terrain
-first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
+Recorded packets and markers use the 20-tick timeline. Packets in a bundle take effect together at its
+opening timestamp. To apply this timing to an earlier import, import the original MCPR again. Playback
+opens when the recording player and terrain first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
 connection configuration and includes embedded server resource packs.
 
 If the recording contains a ReplayMod path library, open **Editor → ReplayMod paths…** and select the autosave

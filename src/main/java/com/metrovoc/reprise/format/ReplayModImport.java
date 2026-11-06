@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.format;
 
+import com.google.common.io.FileBackedOutputStream;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.metrovoc.reprise.record.PacketCodecs;
@@ -26,6 +27,7 @@ import java.util.zip.ZipOutputStream;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.BundlerInfo;
 import net.minecraft.network.protocol.PacketType;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.CommonPacketTypes;
@@ -111,8 +113,8 @@ public final class ReplayModImport {
                 // entries while spooling the smaller timeline separately, then append it to the ZIP.
                 Path timeline = Files.createTempFile(destination, ".timeline-", ".part");
                 try {
-                    try (var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)))) {
-                        var writer = new PacketWriter(data, out, meta, segment, packs);
+                    try (var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)));
+                         var writer = new PacketWriter(data, out, meta, segment, packs)) {
                         if (legacy) {
                             LegacyMcpr.read(zip, packets, writer);
                         } else {
@@ -153,13 +155,17 @@ public final class ReplayModImport {
         }
     }
 
-    static final class PacketWriter {
+    static final class PacketWriter implements AutoCloseable {
         private final DataOutputStream out, chunks;
         private final ZipOutputStream zip;
         private final ReplayMeta meta;
         private final ReplayMeta.Segment segment;
         private final Map<String, String> packs;
         private final Map<PacketType<?>, Integer> loginIds = new HashMap<>(), configIds = new HashMap<>(), ids = new HashMap<>();
+        // Stage only the current bundle. Large bundles spill to disk until their closing delimiter arrives.
+        private final FileBackedOutputStream bundle = new FileBackedOutputStream(2 * 1024 * 1024);
+        private final DataOutputStream bundleOut = new DataOutputStream(bundle);
+        private int bundleTime = -1, bundleSize, lastTimestamp;
         private Phase phase = Phase.LOGIN;
         private boolean joined;
         private int recorderId = -1, spawnTick = -1, terrainTick = -1, previous;
@@ -180,13 +186,56 @@ public final class ReplayModImport {
         }
 
         void accept(int time, byte[] bytes) throws IOException {
-            // ReplayMod delivers packets in file order. A late packet whose time has passed is due immediately.
-            time = Math.max(time, previous);
-            previous = time;
-            int size = bytes.length;
-            if (size == 0) return;
+            lastTimestamp = Math.max(lastTimestamp, time);
+            if (bytes.length == 0) return;
             var body = ByteBuffer.wrap(bytes);
             int id = Varints.read(body);
+            if (phase == Phase.PLAY && id == ids.get(GamePacketTypes.CLIENTBOUND_BUNDLE_DELIMITER)) {
+                if (body.hasRemaining()) throw new IOException("Invalid bundle delimiter at " + time + " ms");
+                if (bundleTime < 0) {
+                    previous = Math.max(previous, time);
+                    bundleTime = previous;
+                } else {
+                    flushBundle();
+                }
+                return;
+            }
+            if (bundleTime >= 0) {
+                if (bundleSize == BundlerInfo.BUNDLE_SIZE_LIMIT) throw new IOException("Too many packets in bundle at " + bundleTime + " ms");
+                bundleOut.writeInt(bytes.length);
+                bundleOut.write(bytes);
+                bundleSize++;
+                return;
+            }
+            // A late packet whose time has already passed is due immediately, in file order.
+            previous = Math.max(previous, time);
+            writePacket(previous, bytes, body, id);
+        }
+
+        private void flushBundle() throws IOException {
+            // ReplayMod reads through the closing delimiter as soon as the opening delimiter is due.
+            try (var input = new DataInputStream(bundle.asByteSource().openStream())) {
+                for (int i = 0; i < bundleSize; i++) {
+                    byte[] bytes = new byte[input.readInt()];
+                    input.readFully(bytes);
+                    var body = ByteBuffer.wrap(bytes);
+                    int id = Varints.read(body);
+                    writePacket(bundleTime, bytes, body, id);
+                }
+            }
+            bundle.reset();
+            bundleTime = -1;
+            bundleSize = 0;
+        }
+
+        @Override
+        public void close() throws IOException {
+            // An unfinished trailing bundle was never delivered by the network pipeline.
+            bundle.reset();
+        }
+
+        private void writePacket(int time, byte[] bytes, ByteBuffer body, int id) throws IOException {
+            int size = bytes.length;
             if (phase == Phase.LOGIN) {
                 if (id == loginIds.get(LoginPacketTypes.CLIENTBOUND_LOGIN_FINISHED)) {
                     var buf = Unpooled.wrappedBuffer(body);
@@ -258,7 +307,7 @@ public final class ReplayModImport {
             chunks.flush();
             if (!joined) throw new IOException("ReplayMod recording contains no world login");
             if (segment.actionsOffset == 0) endSnapshot(out, segment);
-            advance(out, segment, tickAt(Math.max(duration, previous)));
+            advance(out, segment, tickAt(Math.max(duration, lastTimestamp)));
             meta.durationTicks = segment.ticks;
             meta.openingTick = Math.max(0, Math.max(spawnTick, terrainTick));
         }
