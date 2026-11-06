@@ -33,7 +33,7 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
  */
 public final class Recorder {
     /** Segments are cut at this length so that a seek never has to fast-forward more than one segment. */
-    public static final int SEGMENT_TICKS = 20 * 60 * 5;
+    public static final int SEGMENT_TICKS = Integer.getInteger("reprise.segmentTicks", 20 * 60 * 5);
 
     private static Recorder active;
 

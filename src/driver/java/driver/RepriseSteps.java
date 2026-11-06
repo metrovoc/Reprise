@@ -31,6 +31,7 @@ public final class RepriseSteps {
                 case "start" -> Recorder.start();
                 case "stop" -> LOG.info("[driver] saved {}", Recorder.stop());
                 case "pause" -> Recorder.active().setPaused(!Recorder.active().isPaused());
+                case "state" -> LOG.info("[driver] recording ticks={} segments={}", Recorder.active().meta().durationTicks, Recorder.active().meta().segments.size());
                 default -> throw new IllegalArgumentException(arg);
             }
         });

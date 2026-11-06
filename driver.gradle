@@ -28,6 +28,7 @@ neoForge {
             var projectDir = layout.projectDirectory
             systemProperties.put 'driver.script', providers.gradleProperty('script').map { projectDir.file(it).asFile.absolutePath }.orElse('')
             systemProperties.put 'driver.monitor', providers.gradleProperty('monitor').orElse('')
+            systemProperties.put 'reprise.segmentTicks', providers.gradleProperty('segmentTicks').orElse('6000')
             programArguments.addAll '--width', '1600', '--height', '1000'
         }
     }

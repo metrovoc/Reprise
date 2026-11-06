@@ -1,0 +1,39 @@
+# A natural world: wandering mobs, the player moving and building, several segments.
+world 8675309
+cmd gamerule send_command_feedback false
+cmd gamerule advance_time false
+cmd time set 1000
+gui 2
+fly on
+cmd tp @s 0 100 0 0 30
+wait 60
+cmd spreadplayers ~ ~ 0 1 false @s
+wait 40
+cmd summon minecraft:sheep ~3 ~ ~5
+cmd summon minecraft:wolf ~-2 ~ ~6
+cmd summon minecraft:chicken ~1 ~ ~7
+cmd summon minecraft:zombie ~4 ~ ~9 {PersistenceRequired:1b}
+wait 20
+record start
+wait 40
+shot live_a
+record state
+cmd fill ~2 ~ ~3 ~4 ~2 ~3 minecraft:oak_planks
+wait 60
+cmd tp @s ~ ~ ~4
+wait 80
+record state
+shot live_b
+cmd tp @s ~10 ~5 ~ -90 20
+wait 120
+cmd time set 6000
+cmd weather rain
+wait 100
+record state
+shot live_c
+cmd tp @s ~-10 ~ ~-4 180 15
+wait 120
+record state
+record stop
+wait 10
+quit

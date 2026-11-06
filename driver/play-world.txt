@@ -1,0 +1,28 @@
+replay latest
+wait 120
+replay spectate
+replay seek 42
+wait 20
+replay state
+shot p_a
+replay seek 187
+wait 20
+replay state
+shot p_b
+replay seek 412
+wait 20
+replay state
+shot p_c
+replay seek 300
+wait 5
+replay state
+replay seek 100
+wait 5
+replay state
+replay play
+wait 300
+replay state
+shot p_end
+replay exit
+wait 40
+quit
