@@ -816,7 +816,31 @@ public final class ReplaySession {
             && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistrySyncStartPayload)
             && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistryPayload)
             && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistrySyncCompletedPayload)) return;
+        if (packet instanceof ClientboundCustomPayloadPacket custom
+            && custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistryPayload frozen
+            && frozen.snapshot().getIds().containsKey(-1)) {
+            packet = new ClientboundCustomPayloadPacket(new net.neoforged.neoforge.network.payload.FrozenRegistryPayload(
+                frozen.registryName(), withoutUnnumbered(frozen.snapshot())));
+        }
         deliver(packet, this.configListener);
+    }
+
+    /**
+     * Drops the ID -1 entry from a recorded registry snapshot. NeoForge snapshots a client's registries with
+     * {@code getId}, which is -1 for entries the server never numbered (client-only content); replaying that entry
+     * crashes the registry sync. Nothing in the recording can refer to an entry without an ID.
+     */
+    private static net.neoforged.neoforge.registries.RegistrySnapshot withoutUnnumbered(net.neoforged.neoforge.registries.RegistrySnapshot snapshot) {
+        var ids = new it.unimi.dsi.fastutil.ints.Int2ObjectRBTreeMap<>(snapshot.getIds());
+        ids.remove(-1);
+        var buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        try {
+            buf.writeMap(ids, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeIdentifier);
+            buf.writeMap(snapshot.getAliases(), FriendlyByteBuf::writeIdentifier, FriendlyByteBuf::writeIdentifier);
+            return net.neoforged.neoforge.registries.RegistrySnapshot.STREAM_CODEC.decode(buf);
+        } finally {
+            buf.release();
+        }
     }
 
     private void finishConfiguration() {
