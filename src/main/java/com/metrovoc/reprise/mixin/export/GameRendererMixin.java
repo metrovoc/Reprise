@@ -20,6 +20,13 @@ public abstract class GameRendererMixin {
         return hidden && (job == null || !job.handsOnly());
     }
 
+    @Inject(method = "renderLevel", at = @At(value = "INVOKE",
+        target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+    private void reprise$captureWorldDepth(DeltaTracker delta, CallbackInfo ci) {
+        var exporter = VideoExporter.running();
+        if (exporter != null) exporter.captureWorldDepth();
+    }
+
     /** Extract only the requested in-game layers. Export controls and viewer toasts belong to the live window. */
     @Inject(method = "extractGui", at = @At("HEAD"), cancellable = true)
     private void reprise$noGuiInExport(DeltaTracker deltaTracker, boolean shouldRenderLevel, boolean resourcesLoaded, CallbackInfo ci) {

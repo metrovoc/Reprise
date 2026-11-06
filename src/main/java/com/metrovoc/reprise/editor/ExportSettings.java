@@ -28,6 +28,7 @@ public final class ExportSettings {
     public boolean audio = false;
     public boolean transparentSky;
     public boolean supersample;
+    public boolean depthMap;
 
     public boolean hardwareEncoder;
     public int bitrateMbps = 20;

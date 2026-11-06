@@ -128,6 +128,10 @@ follows the replay and the shader frame counter advances once per exported frame
   macOS and NVENC, Quick Sync, and AMF on other systems.
 - **SSAA: 2×2** renders at twice the output width and height, then averages four samples per pixel on the GPU.
   It works with video and PNG, including transparent exports.
+- For compositing, choose **PNG sequence** and enable **Depth**. Each color frame has a matching
+  `frame_000000.depth.exr` with a 32-bit float `Z` channel. Values are distances along the camera’s viewing axis
+  in blocks. Pixels without a world depth value are positive infinity. Hands and HUD appear only in the color pass.
+  At 2×2 SSAA, depth uses the nearest of the four surfaces at each pixel.
 - **Transparent sky** exports straight alpha in PNG sequences and ProRes 4444. For a character cutout, hide terrain
   and clouds in **Scene layers** and choose clear weather. Each output frame samples the same instant against black
   and white to recover transparency, including partially transparent materials. Turn off active Iris shader packs

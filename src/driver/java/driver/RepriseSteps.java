@@ -251,6 +251,7 @@ public final class RepriseSteps {
                     settings.hardwareEncoder = java.util.Arrays.asList(a).contains("gpu");
                     settings.audio = java.util.Arrays.asList(a).contains("audio");
                     settings.supersample = java.util.Arrays.asList(a).contains("ssaa");
+                    settings.depthMap = java.util.Arrays.asList(a).contains("depth");
                     settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");
                     if (a[0].equals("export")) com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
                 }

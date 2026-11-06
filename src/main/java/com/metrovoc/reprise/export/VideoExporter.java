@@ -54,7 +54,10 @@ public final class VideoExporter {
     private final Screen returnTo;
     private final FrameSink sink;
     private final AudioCapture audio;
-    private final BlockingQueue<byte[]> frames = new ArrayBlockingQueue<>(6);
+    private record Frame(byte[] color, byte[] depth, float m22, float m32) {}
+    private static final Frame END = new Frame(null, null, 0, 0);
+    private final boolean zeroToOne = RenderSystem.getDevice().isZZeroToOne();
+    private final BlockingQueue<Frame> frames = new ArrayBlockingQueue<>(6);
     private final Thread writer;
     private volatile Throwable writeError;
     private volatile boolean writerDone;
@@ -70,6 +73,9 @@ public final class VideoExporter {
     private int pendingReadbacks;
     private final int renderWidth, renderHeight;
     private TextureTarget downsampled;
+    private final boolean withDepth;
+    private DepthPass depthPass;
+    private boolean depthCaptured;
     private final boolean transparent;
     private boolean whitePass;
     private boolean finished;
@@ -85,6 +91,7 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
+        this.withDepth = settings.depthMap && settings.format == ExportSettings.Format.PNG_SEQUENCE;
         this.transparent = settings.transparentSky && settings.supportsAlpha();
         if (this.transparent && ShaderPacks.active()) {
             throw new IllegalStateException(Component.translatable("reprise.export.alpha_shaders").getString());
@@ -252,6 +259,7 @@ public final class VideoExporter {
      */
     public int advance(float[] partial) {
         this.captureThisFrame = false;
+        this.depthCaptured = false;
         partial[0] = 0;
         if (this.finished) {
             return 0;
@@ -383,6 +391,17 @@ public final class VideoExporter {
         }
     }
 
+    public void captureWorldDepth() {
+        if (!captureThisFrame || whitePass || !withDepth) return;
+        try {
+            if (depthPass == null) depthPass = new DepthPass(width, height);
+            depthPass.capture(mc.getMainRenderTarget());
+            depthCaptured = true;
+        } catch (RuntimeException e) {
+            writeError = e;
+        }
+    }
+
     private void readBack() {
         RenderTarget target = this.mc.getMainRenderTarget();
         if (target.width != this.renderWidth || target.height != this.renderHeight) {
@@ -404,11 +423,17 @@ public final class VideoExporter {
         GpuTexture texture = target.getColorTexture();
         int w = target.width, h = target.height;
         int pixelSize = texture.getFormat().pixelSize();
+        boolean readDepth = withDepth && !whitePass;
+        if (readDepth && !depthCaptured) throw new IllegalStateException("World depth was unavailable for this frame");
+        var projection = mc.gameRenderer.getGameRenderState().levelRenderState.cameraRenderState.projectionMatrix;
+        float m22 = projection.m22(), m32 = projection.m32();
+        long colorBytes = (long) w * h * pixelSize;
         GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Reprise export frame",
-            GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, (long) w * h * pixelSize);
+            GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, colorBytes * (readDepth ? 2 : 1));
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         this.pendingReadbacks++;
         try {
+            if (readDepth) encoder.copyTextureToBuffer(depthPass.target.getColorTexture(), buffer, colorBytes, () -> {}, 0);
             encoder.copyTextureToBuffer(texture, buffer, 0L, () -> {
                 // OpenGL can enqueue the fence before reporting that the copy failed.
                 if (buffer.isClosed()) {
@@ -416,9 +441,15 @@ public final class VideoExporter {
                 }
                 try (GpuBuffer.MappedView view = encoder.mapBuffer(buffer, true, false)) {
                     byte[] bytes = new byte[w * h * 4];
-                    view.data().get(bytes);
+                    var mapped = view.data();
+                    mapped.get(bytes);
+                    byte[] depth = null;
+                    if (readDepth) {
+                        depth = new byte[bytes.length];
+                        mapped.get(depth);
+                    }
                     if (!this.finished) {
-                        enqueue(bytes);
+                        enqueue(new Frame(bytes, depth, m22, m32));
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -438,7 +469,7 @@ public final class VideoExporter {
         }
     }
 
-    private void enqueue(byte[] frame) throws InterruptedException {
+    private void enqueue(Frame frame) throws InterruptedException {
         while (!this.writerDone && this.writeError == null) {
             if (this.frames.offer(frame, 100, TimeUnit.MILLISECONDS)) {
                 return;
@@ -450,19 +481,24 @@ public final class VideoExporter {
         try {
             int written = 0;
             while (true) {
-                byte[] bytes = this.frames.take();
-                if (bytes.length == 0) {
+                Frame captured = this.frames.take();
+                if (captured == END) {
                     if (written != this.totalFrames) {
                         throw new IOException("Incomplete video: " + written + " frames written");
                     }
                     break;
                 }
+                byte[] bytes = captured.color;
                 if (this.transparent) {
-                    byte[] white = this.frames.take();
-                    if (white.length != bytes.length) {
+                    byte[] white = this.frames.take().color;
+                    if (white == null || white.length != bytes.length) {
                         throw new IOException("Missing white transparency pass");
                     }
                     AlphaMatte.combine(bytes, white);
+                }
+                if (captured.depth != null) {
+                    DepthExr.write(files.media.resolve(String.format("frame_%06d.depth.exr", written)), width, height, captured.depth,
+                        captured.m22, captured.m32, zeroToOne);
                 }
                 this.sink.frame(bytes);
                 written++;
@@ -499,7 +535,7 @@ public final class VideoExporter {
         Path output = null;
         try {
             if (success) {
-                enqueue(new byte[0]);
+                enqueue(END);
                 this.writer.join();
                 ok = this.writeError == null && this.sink.finish();
                 if (!ok) {
@@ -525,6 +561,7 @@ public final class VideoExporter {
             this.audio.stop();
         }
         cleanupFiles(!ok && (success || this.writeError != null));
+        if (this.depthPass != null) this.depthPass.close();
         if (this.downsampled != null) {
             this.downsampled.destroyBuffers();
         }

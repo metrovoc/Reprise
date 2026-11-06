@@ -6,6 +6,8 @@
   "reprise.export.ssaa.tooltip": "Render four samples per output pixel to smooth edges.",
   "reprise.export.size_limit": "Render size %s×%s exceeds the GPU limit of %s pixels per side.",
   "reprise.export.audio_failed": "Could not finish the soundtrack.",
+  "reprise.export.depth": "Depth: %s",
+  "reprise.export.depth.tooltip": "Save camera-space depth in blocks as a float EXR beside each PNG frame.",
   "reprise.export.transparent_sky": "Transparent sky: %s",
   "reprise.environment.layers": "Scene layers",
   "reprise.environment.sky_color": "Sky color (hex)",

@@ -25,6 +25,7 @@ public final class ExportScreen extends Screen {
     private String error;
     private String ffmpeg;
     private Button alphaButton;
+    private Button depthButton;
     private Button encoderButton;
     private Button qualityButton;
     private long frameCount;
@@ -49,7 +50,7 @@ public final class ExportScreen extends Screen {
             ExportSettings.Format[] all = ExportSettings.Format.values();
             this.settings.format = all[(this.settings.format.ordinal() + 1) % all.length];
             updateEncoder();
-            updateAlpha();
+            updatePasses();
         });
         cycle(x, y + 24, w - 68, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
             int i = 0;
@@ -91,8 +92,11 @@ public final class ExportScreen extends Screen {
             this.session.project().checkpoint();
             this.settings.transparentSky = !this.settings.transparentSky;
             this.session.project().save();
-            updateAlpha();
-        }).bounds(x, y + 120, w, 20).build());
+            updatePasses();
+        }).bounds(x, y + 120, 113, 20).build());
+        this.depthButton = cycle(x + 117, y + 120, w - 117,
+            this::depthLabel, () -> this.settings.depthMap = !this.settings.depthMap);
+        this.depthButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.depth.tooltip")));
         cycle(x + w - 64, y + 24, 64,
             () -> Component.translatable(!this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
             () -> {
@@ -106,7 +110,7 @@ public final class ExportScreen extends Screen {
                 }
             })
             .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
-        updateAlpha();
+        updatePasses();
 
         addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 147, w / 2 - 2, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 147, w / 2 - 2, 20).build());
@@ -137,7 +141,14 @@ public final class ExportScreen extends Screen {
         this.qualityButton.setMessage(qualityLabel());
     }
 
-    private void updateAlpha() {
+    private Component depthLabel() {
+        boolean enabled = this.settings.format == ExportSettings.Format.PNG_SEQUENCE && this.settings.depthMap;
+        return Component.translatable("reprise.export.depth", Component.translatable(enabled ? "options.on" : "options.off"));
+    }
+
+    private void updatePasses() {
+        this.depthButton.active = this.settings.format == ExportSettings.Format.PNG_SEQUENCE;
+        this.depthButton.setMessage(depthLabel());
         this.alphaButton.active = this.settings.supportsAlpha() && (!this.shaders || this.settings.transparentSky);
         this.alphaButton.setTooltip(this.shaders && this.settings.supportsAlpha()
             ? net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.alpha_shaders")) : null);
