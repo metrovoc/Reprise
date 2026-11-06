@@ -14,7 +14,7 @@ public abstract class WindowMixin {
     private void reprise$exportWidth(CallbackInfoReturnable<Integer> cir) {
         VideoExporter exporter = VideoExporter.running();
         if (exporter != null) {
-            cir.setReturnValue(exporter.width());
+            cir.setReturnValue(exporter.renderWidth());
         }
     }
 
@@ -22,7 +22,7 @@ public abstract class WindowMixin {
     private void reprise$exportHeight(CallbackInfoReturnable<Integer> cir) {
         VideoExporter exporter = VideoExporter.running();
         if (exporter != null) {
-            cir.setReturnValue(exporter.height());
+            cir.setReturnValue(exporter.renderHeight());
         }
     }
 }

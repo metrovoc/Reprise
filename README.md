@@ -87,6 +87,8 @@ to finish building. With Sodium, Reprise requests synchronous terrain rendering 
 follows the replay and the shader frame counter advances once per exported frame.
 
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
+- **SSAA: 2×2** renders at twice the output width and height, then averages four samples per pixel on the GPU.
+  It works with video and PNG, including transparent exports.
 - **Transparent sky** exports straight alpha in PNG sequences and ProRes 4444. For a character cutout, hide terrain
   and clouds in **Scene layers** and choose clear weather. Each output frame samples the same instant against black
   and white to recover transparency, including partially transparent materials. Turn off active Iris shader packs
@@ -95,7 +97,7 @@ follows the replay and the shader frame counter advances once per exported frame
 - Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
 
 Video formats need [ffmpeg](https://ffmpeg.org/). Reprise finds it on your `PATH`, in the usual Homebrew folders,
-or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg.
+or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg. With sound enabled, the sequence includes a 48 kHz stereo PCM soundtrack in `audio.wav`.
 
 ## Limits
 

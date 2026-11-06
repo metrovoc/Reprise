@@ -7,6 +7,10 @@ import com.metrovoc.reprise.playback.CameraPath;
 import com.metrovoc.reprise.playback.ReplaySession;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
+import com.mojang.blaze3d.textures.FilterMode;
+import java.util.OptionalInt;
+import net.minecraft.client.renderer.RenderPipelines;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -60,6 +64,8 @@ public final class VideoExporter {
     private boolean captureThisFrame;
     private boolean progressFrame;
     private int pendingReadbacks;
+    private final int renderWidth, renderHeight;
+    private TextureTarget downsampled;
     private final boolean transparent;
     private boolean whitePass;
     private boolean finished;
@@ -84,6 +90,14 @@ public final class VideoExporter {
         this.end = session.project().end(session.duration());
         this.width = settings.width & ~1;
         this.height = settings.height & ~1;
+        int scale = settings.supersample ? 2 : 1;
+        int max = RenderSystem.getDevice().getMaxTextureSize();
+        if (this.width < 2 || this.height < 2 || this.width > max / scale || this.height > max / scale) {
+            throw new IllegalArgumentException(Component.translatable("reprise.export.size_limit", (long) this.width * scale,
+                (long) this.height * scale, max).getString());
+        }
+        this.renderWidth = this.width * scale;
+        this.renderHeight = this.height * scale;
         this.frameTicks = session.project().frameTicks(this.start, this.end, settings.fps);
         this.totalFrames = this.frameTicks.length;
         if (this.totalFrames == 0) {
@@ -94,7 +108,7 @@ public final class VideoExporter {
         String base = session.file().path().getFileName().toString().replaceFirst("\\.reprise$", "") + "_" + stamp;
         Path dir = ReprisePaths.exports();
         if (settings.format == ExportSettings.Format.PNG_SEQUENCE) {
-            this.output = dir.resolve(base);
+            this.output = PngSink.createDirectory(dir, base);
             this.sink = new PngSink(this.output, this.width, this.height, this.transparent);
         } else {
             String ffmpeg = FfmpegSink.find(settings.ffmpeg);
@@ -104,7 +118,15 @@ public final class VideoExporter {
             this.output = dir.resolve(base + "." + settings.format.extension);
             this.sink = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.output, dir.resolve(base + ".log"));
         }
-        this.audio = settings.audio ? new AudioCapture(dir.resolve(base + ".f32"), settings.fps) : null;
+        boolean sequence = settings.format == ExportSettings.Format.PNG_SEQUENCE;
+        try {
+            Path audioFile = sequence ? this.output.resolve("audio.wav.part") : dir.resolve(base + ".f32");
+            this.audio = settings.audio ? new AudioCapture(audioFile,
+                settings.fps, this.totalFrames, sequence) : null;
+        } catch (IOException e) {
+            this.sink.abort();
+            throw e;
+        }
         this.writer = new Thread(this::write, "Reprise Export Writer");
         this.writer.setDaemon(true);
         this.writer.start();
@@ -150,25 +172,30 @@ public final class VideoExporter {
         }
         VideoExporter exporter = new VideoExporter(session, settings, returnTo);
         running = exporter;
-        if (exporter.audio != null) {
-            exporter.audio.start();
+        try {
+            if (exporter.audio != null) {
+                exporter.audio.start();
+            }
+            session.setPlaying(false);
+            session.seek(exporter.start);
+            CameraPath.setForced(true);
+            exporter.mc.setScreen(new ExportProgressScreen(exporter));
+            exporter.mc.resizeGui();
+            FlawlessFrames.setEnabled(true);
+        } catch (RuntimeException e) {
+            exporter.stop(false, Component.translatable("reprise.export.failed", String.valueOf(e.getMessage())));
+            throw e;
         }
-        session.setPlaying(false);
-        session.seek(exporter.start);
-        CameraPath.setForced(true);
-        exporter.mc.setScreen(new ExportProgressScreen(exporter));
-        exporter.mc.resizeGui();
-        FlawlessFrames.setEnabled(true);
         Reprise.LOGGER.info("Exporting ticks {}..{} as {} frames at {}x{} to {}", exporter.start, exporter.end, exporter.totalFrames,
             exporter.width, exporter.height, exporter.output);
     }
 
-    public int width() {
-        return this.width;
+    public int renderWidth() {
+        return this.renderWidth;
     }
 
-    public int height() {
-        return this.height;
+    public int renderHeight() {
+        return this.renderHeight;
     }
 
     public int frame() {
@@ -293,7 +320,12 @@ public final class VideoExporter {
             return;
         }
         this.waited = 0;
-        readBack();
+        try {
+            readBack();
+        } catch (RuntimeException e) {
+            this.writeError = e;
+            return;
+        }
         if (this.transparent) {
             this.whitePass = !this.whitePass;
             if (this.whitePass) {
@@ -315,30 +347,57 @@ public final class VideoExporter {
 
     private void readBack() {
         RenderTarget target = this.mc.getMainRenderTarget();
+        if (target.width != this.renderWidth || target.height != this.renderHeight) {
+            throw new IllegalStateException("Unexpected render target size " + target.width + "×" + target.height);
+        }
+        if (this.renderWidth != this.width) {
+            if (this.downsampled == null) {
+                this.downsampled = new TextureTarget("Reprise supersampling", this.width, this.height, false);
+            }
+            // A centered linear sample of an exactly 2x source averages the four covered texels.
+            try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                () -> "Reprise downsample", this.downsampled.getColorTextureView(), OptionalInt.empty())) {
+                pass.setPipeline(RenderPipelines.TRACY_BLIT);
+                pass.bindTexture("InSampler", target.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+                pass.draw(0, 3);
+            }
+            target = this.downsampled;
+        }
         GpuTexture texture = target.getColorTexture();
         int w = target.width, h = target.height;
-        if (w != this.width || h != this.height) {
-            Reprise.LOGGER.warn("Frame is {}x{}, expected {}x{}", w, h, this.width, this.height);
-        }
         int pixelSize = texture.getFormat().pixelSize();
         GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Reprise export frame",
             GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, (long) w * h * pixelSize);
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         this.pendingReadbacks++;
-        encoder.copyTextureToBuffer(texture, buffer, 0L, () -> {
-            try (GpuBuffer.MappedView view = encoder.mapBuffer(buffer, true, false)) {
-                byte[] bytes = new byte[w * h * 4];
-                view.data().get(bytes);
-                if (!this.finished) {
-                    enqueue(bytes);
+        try {
+            encoder.copyTextureToBuffer(texture, buffer, 0L, () -> {
+                // OpenGL can enqueue the fence before reporting that the copy failed.
+                if (buffer.isClosed()) {
+                    return;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
+                try (GpuBuffer.MappedView view = encoder.mapBuffer(buffer, true, false)) {
+                    byte[] bytes = new byte[w * h * 4];
+                    view.data().get(bytes);
+                    if (!this.finished) {
+                        enqueue(bytes);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (RuntimeException e) {
+                    this.writeError = e;
+                } finally {
+                    buffer.close();
+                    this.pendingReadbacks--;
+                }
+            }, 0);
+        } catch (RuntimeException e) {
+            if (!buffer.isClosed()) {
                 buffer.close();
                 this.pendingReadbacks--;
             }
-        }, 0);
+            throw e;
+        }
     }
 
     private void enqueue(byte[] frame) throws InterruptedException {
@@ -400,8 +459,10 @@ public final class VideoExporter {
                     this.sink.abort();
                 }
                 if (ok && this.audio != null) {
-                    this.audio.stop();
-                    ok = addAudio();
+                    ok = this.audio.stop() && addAudio();
+                    if (!ok) {
+                        failure = Component.translatable("reprise.export.audio_failed");
+                    }
                 }
             } else {
                 this.writer.interrupt();
@@ -421,8 +482,11 @@ public final class VideoExporter {
             } catch (java.io.IOException ignored) {
             }
         }
-        restore();
+        if (this.downsampled != null) {
+            this.downsampled.destroyBuffers();
+        }
         running = null;
+        restore();
         Component message = ok ? Component.translatable("reprise.export.done", this.output.getFileName().toString())
             : failure != null ? failure : Component.translatable("reprise.export.failed", "ffmpeg");
         Reprise.LOGGER.info("Export {} after {} frames in {} s: {}", ok ? "finished" : "stopped", this.frame, elapsedMillis() / 1000, this.output);
@@ -431,14 +495,14 @@ public final class VideoExporter {
 
     /** Muxes the captured sound into the video, or writes it next to a PNG sequence. */
     private boolean addAudio() {
-        String ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
-        if (ffmpeg == null) {
-            return true;
-        }
         try {
             if (this.settings.format == ExportSettings.Format.PNG_SEQUENCE) {
-                return FfmpegSink.run(ffmpeg, java.util.List.of("-f", "f32le", "-ar", String.valueOf(AudioCapture.RATE), "-ac", "2",
-                    "-i", this.audio.file().toString(), this.output.resolve("audio.wav").toString()), this.output.resolve("audio.log"));
+                java.nio.file.Files.move(this.audio.file(), this.output.resolve("audio.wav"));
+                return true;
+            }
+            String ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
+            if (ffmpeg == null) {
+                return false;
             }
             String name = this.output.getFileName().toString();
             Path muxed = this.output.resolveSibling(name.replaceFirst("(\\.[^.]+)$", ".audio$1"));

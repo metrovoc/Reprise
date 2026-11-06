@@ -1,6 +1,11 @@
 {
   "reprise.environment.shader_sky": "Shader pack may replace sky",
   "reprise.export.alpha_shaders": "Turn off the Iris shader pack to export a transparent sky.",
+  "reprise.export.ssaa.on": "SSAA: 2×2",
+  "reprise.export.ssaa.off": "SSAA: Off",
+  "reprise.export.ssaa.tooltip": "Render four samples per output pixel to smooth edges.",
+  "reprise.export.size_limit": "Render size %s×%s exceeds the GPU limit of %s pixels per side.",
+  "reprise.export.audio_failed": "Could not finish the soundtrack.",
   "reprise.export.transparent_sky": "Transparent sky: %s",
   "reprise.environment.layers": "Scene layers",
   "reprise.environment.sky_color": "Sky color (hex)",

@@ -29,12 +29,16 @@ public final class AudioCapture {
     private final FloatBuffer samples;
     private final ByteBuffer bytes;
     private long device;
-    private double owed;
+    private final boolean wave;
+    private final long expectedSamples;
+    private long remainder;
     private long written;
 
-    AudioCapture(Path file, int fps) throws IOException {
+    AudioCapture(Path file, int fps, int frames, boolean wave) throws IOException {
         this.file = file;
         this.fps = fps;
+        this.wave = wave;
+        this.expectedSamples = (long) frames * RATE / fps;
         this.out = new BufferedOutputStream(Files.newOutputStream(file), 1 << 16);
         int max = RATE / Math.max(1, fps) + 2;
         this.samples = MemoryUtil.memAllocFloat(max * CHANNELS);
@@ -57,7 +61,10 @@ public final class AudioCapture {
     /** Takes one video frame's worth of sound. */
     void frame() throws IOException {
         if (this.device == 0) {
-            return;
+            throw new IOException("No audio loopback device");
+        }
+        if (this.wave && this.written == 0) {
+            this.out.write(PcmWave.header(this.expectedSamples));
         }
         // Sounds start on the sound thread. Export runs faster than real time, so let that thread catch up with
         // this frame's sounds first; each round also runs the tasks the previous round queued.
@@ -65,36 +72,40 @@ public final class AudioCapture {
         for (int i = 0; i < 3; i++) {
             executor.submit(() -> {}).join();
         }
-        this.owed += (double) RATE / this.fps;
-        int count = (int) Math.floor(this.owed);
-        this.owed -= count;
+        this.remainder += RATE;
+        int count = (int) (this.remainder / this.fps);
+        this.remainder %= this.fps;
         this.samples.clear();
         SOFTLoopback.alcRenderSamplesSOFT(this.device, this.samples, count);
         this.bytes.clear();
         for (int i = 0; i < count * CHANNELS; i++) {
-            this.bytes.putFloat(this.samples.get(i));
+            float value = this.samples.get(i);
+            if (this.wave) {
+                this.bytes.putShort(PcmWave.sample(value));
+            } else {
+                this.bytes.putFloat(value);
+            }
         }
         this.out.write(this.bytes.array(), 0, this.bytes.position());
         this.written += count;
     }
 
     /** Back to the speakers. */
-    void stop() {
+    boolean stop() {
+        boolean closed = true;
         try {
             this.out.close();
         } catch (IOException e) {
+            closed = false;
             Reprise.LOGGER.warn("Could not close the audio capture", e);
         }
         MemoryUtil.memFree(this.samples);
         loopback = false;
         Minecraft.getInstance().getSoundManager().reload();
+        return closed && this.written == this.expectedSamples;
     }
 
     Path file() {
         return this.file;
-    }
-
-    long written() {
-        return this.written;
     }
 }

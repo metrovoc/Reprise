@@ -1,0 +1,9 @@
+# Run after record-pov.txt. The two block placements should be audible in the WAV.
+replay latest
+wait 60
+replay spectate
+replay seek 0
+replay export 640 360 30 PNG_SEQUENCE audio
+wait 140
+pixels soundtrack 30
+quit

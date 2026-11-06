@@ -1,0 +1,17 @@
+# Run after record-pov.txt on a fresh project. The middle export uses the UI toggle.
+replay latest
+wait 60
+replay spectate
+replay export 640 360 30 PNG_SEQUENCE
+wait 150
+replay editor
+press Export
+press SSAA: Off
+press Export
+wait 150
+replay export 1280 720 30 PNG_SEQUENCE
+wait 150
+pixels supersample 70
+replay export 640 360 30 MOV_PRORES ssaa alpha audio
+wait 150
+quit

@@ -63,8 +63,12 @@ public final class ExportScreen extends Screen {
         });
         cycle(x, y + 96, w, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
             () -> this.settings.audio = !this.settings.audio);
-        cycle(x, y + 72, w, () -> Component.translatable("reprise.export.quality", this.settings.quality), () -> this.settings.quality = next(QUALITIES, this.settings.quality));
+        cycle(x, y + 72, w / 2 - 2, () -> Component.translatable("reprise.export.quality", this.settings.quality), () -> this.settings.quality = next(QUALITIES, this.settings.quality));
 
+        cycle(x + w / 2 + 2, y + 72, w / 2 - 2,
+            () -> Component.translatable(this.settings.supersample ? "reprise.export.ssaa.on" : "reprise.export.ssaa.off"),
+            () -> this.settings.supersample = !this.settings.supersample)
+            .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.ssaa.tooltip")));
         this.alphaButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             this.settings.transparentSky = !this.settings.transparentSky;
             this.session.project().save();
@@ -89,13 +93,13 @@ public final class ExportScreen extends Screen {
             Component.translatable(this.alphaButton.active && this.settings.transparentSky ? "options.on" : "options.off")));
     }
 
-    private void cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
+    private Button cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
         Button button = Button.builder(label.get(), b -> {
             next.run();
             b.setMessage(label.get());
             this.session.project().save();
         }).bounds(x, y, w, 20).build();
-        addRenderableWidget(button);
+        return addRenderableWidget(button);
     }
 
     private static int next(int[] values, int current) {

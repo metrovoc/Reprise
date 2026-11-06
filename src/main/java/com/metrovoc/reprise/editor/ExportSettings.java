@@ -26,6 +26,7 @@ public final class ExportSettings {
     public boolean hideHud = true;
     public boolean audio = false;
     public boolean transparentSky;
+    public boolean supersample;
 
     public boolean supportsAlpha() {
         return format == Format.PNG_SEQUENCE || format == Format.MOV_PRORES;

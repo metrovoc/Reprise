@@ -12,8 +12,19 @@ final class PngSink implements FrameSink {
     private final boolean alpha;
     private int index;
 
-    PngSink(Path dir, int width, int height, boolean alpha) throws IOException {
-        this.dir = Files.createDirectories(dir);
+    static Path createDirectory(Path parent, String base) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            Path path = parent.resolve(attempt == 1 ? base : base + "_" + attempt);
+            try {
+                return Files.createDirectory(path);
+            } catch (java.nio.file.FileAlreadyExistsException ignored) {
+                // A short export or a retry can start in the same second as the last one.
+            }
+        }
+    }
+
+    PngSink(Path dir, int width, int height, boolean alpha) {
+        this.dir = dir;
         this.alpha = alpha;
         this.width = width;
         this.height = height;
