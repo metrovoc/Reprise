@@ -52,7 +52,7 @@ public final class EditorScreen extends Screen {
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
-        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 60, 50, 64};
+        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 66, 50, 64};
         int gaps = 2 * (widths.length + 2) + 12;
         int total = gaps;
         for (int w : widths) {

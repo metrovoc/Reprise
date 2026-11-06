@@ -1,0 +1,97 @@
+# Reprise
+
+Reprise records your Minecraft sessions and lets you watch them again from any angle. Scrub and seek in both
+directions, fly a free camera or ride along in another player's first-person view, build camera moves from keyframes,
+and export them to video with sound.
+
+Client-side mod for NeoForge, Minecraft 26.1.2. It works in singleplayer and on any server; the server needs nothing
+installed.
+
+## Recording
+
+- **Start and stop** from the pause menu (*Start Recording* / *Stop Recording*), or bind *Start/Stop Recording* in
+  Controls. Recordings can also start by themselves when you open a world or join a server (Mods → Reprise → Config).
+- **Pause** with *Pause/Resume Recording*; the paused time is left out of the replay.
+- **Markers** (`M`) flag moments to come back to. They show on the timeline; double-click one to jump to it.
+- A red dot and the recorded time show in the corner while recording.
+- Leaving the world saves the replay to `reprise/replays/` in the game folder. A recording cut short by a crash is
+  repaired and saved the next time you open the replay list.
+
+Everything the server sends is recorded, along with what it never sends back to you about yourself: your movement,
+held items, swings, block breaking, the blocks you place and the sounds you make.
+
+## Watching
+
+Open **Replays** on the title screen and pick one.
+
+| Key | Action |
+| --- | --- |
+| `W` `A` `S` `D`, `Space`, `Shift` | Fly the camera; hold `Ctrl` to go faster, scroll to change the speed |
+| `P` | Play / pause |
+| `←` `→` | Seek 5 s back or forward (hold `Ctrl` for 10 s) |
+| `↑` `↓` | Faster / slower playback, from 0.05× to 16× |
+| Left click | Spectate the entity under the crosshair; sneak to fly free again |
+| `Tab` | Open the editor |
+| `Z` / `C` | Roll the camera |
+
+While you spectate a player you see what they saw, with their held items and arm swings. The camera keeps following
+them through deaths, dimension changes and seeks.
+
+Seeking is fast both ways: a replay is stored in five-minute segments that each begin with a full picture of the
+world, so a seek replays at most one segment.
+
+## Editing
+
+The editor (`Tab`) puts a timeline under the live world. The movement keys still fly the camera.
+
+- **Keyframe** (`K`) saves the camera's position, angle, roll and field of view at the current moment. Drag a
+  keyframe to move it in time, double-click it to jump there, right-click it to change how the camera travels on to
+  the next one:
+  - *Smooth*: a curve through the keyframes at an even speed;
+  - *Linear*: straight lines;
+  - *Ease*: starts and stops gently;
+  - *Hold*: stays put, then cuts.
+- **Path: On** plays the replay along the keyframed path. The path itself is drawn in the world while the editor is
+  open.
+- **Speed** keys make slow motion and timelapses: set a speed with `−`/`+`, press *Speed*, and from that moment the
+  preview and the export run at that speed. Between two keys the speed changes linearly. Right-click a speed key to remove
+  it.
+- `[` and `]` set where the export starts and ends.
+- **Names** shows or hides name tags.
+- `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
+
+Keyframes and settings are saved with each replay, in `reprise/projects/`.
+
+## Exporting
+
+*Export* in the editor renders the selected range to `reprise/exports/`. Frames are rendered at a fixed time step,
+so the video is smooth however fast your computer is. The GUI is left out, and the export waits for every chunk in view
+to finish building.
+
+- Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
+- Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.
+- Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
+
+Video formats need [ffmpeg](https://ffmpeg.org/). Reprise finds it on your `PATH`, in the usual Homebrew folders,
+or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg.
+
+## Limits
+
+- A replay plays on the Minecraft version it was recorded on.
+- Mods that send their own network packets to show something may not appear in replays, because those packets are not
+  recorded. Play a replay with the mods it was recorded with.
+- Time spent on loading screens (joining, changing dimension) is left out of the replay.
+
+## Building
+
+Needs JDK 25.
+
+```bash
+./gradlew build
+```
+
+The jar is written to `build/libs/`. `./gradlew test` runs the unit tests.
+
+## License
+
+[GPL-3.0-or-later](LICENSE).

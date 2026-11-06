@@ -4,7 +4,6 @@ import com.metrovoc.reprise.RepriseKeys;
 import com.metrovoc.reprise.editor.EditorScreen;
 import com.metrovoc.reprise.editor.Keyframe;
 import com.metrovoc.reprise.editor.ReplayProject;
-import com.metrovoc.reprise.format.ReplayMeta;
 import com.metrovoc.reprise.gui.Timecode;
 import com.metrovoc.reprise.gui.Timeline;
 import net.minecraft.client.Minecraft;
@@ -122,9 +121,6 @@ public final class PlaybackControls {
             while (RepriseKeys.ADD_KEYFRAME.consumeClick()) {
                 addKeyframe(session);
             }
-            while (RepriseKeys.ADD_MARKER.consumeClick()) {
-                addMarker(session);
-            }
             // Spectate what the crosshair points at; sneak to fly free again.
             while (mc.options.keyAttack.consumeClick()) {
                 if (mc.getCameraEntity() == mc.player && mc.hitResult instanceof EntityHitResult hit) {
@@ -160,9 +156,9 @@ public final class PlaybackControls {
         if (RepriseKeys.PLAY_PAUSE.matches(event)) {
             togglePlay(session);
         } else if (RepriseKeys.SEEK_BACK.matches(event)) {
-            session.seek(session.tick() - (event.hasShiftDown() ? 20 : 100));
+            session.seek(session.tick() - (event.hasControlDown() ? 200 : 100));
         } else if (RepriseKeys.SEEK_FORWARD.matches(event)) {
-            session.seek(session.tick() + (event.hasShiftDown() ? 20 : 100));
+            session.seek(session.tick() + (event.hasControlDown() ? 200 : 100));
         } else if (RepriseKeys.SLOWER.matches(event)) {
             changeSpeed(session, false);
         } else if (RepriseKeys.FASTER.matches(event)) {
@@ -231,12 +227,6 @@ public final class PlaybackControls {
         project.sort();
         project.save();
         mc.gui.setOverlayMessage(Component.translatable("reprise.editor.keyframe.added", Timecode.precise(k.tick)), false);
-    }
-
-    private static void addMarker(ReplaySession session) {
-        ReplayMeta.Marker marker = new ReplayMeta.Marker();
-        marker.tick = session.tick();
-        session.meta().markers.add(marker);
     }
 
     private static void hud(GuiGraphicsExtractor g, float partialTick) {
