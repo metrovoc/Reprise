@@ -26,7 +26,9 @@ HUD appear below the replay timeline.
 
 For smoother first-person turns, set **First-person samples per tick** before recording. The default of 1
 uses ordinary 20 Hz recording. A value of 8 samples the rendered movement at 160 Hz for playback and export.
-The detail available depends on the frame rate during recording. Higher settings use segment format 4.
+The detail available depends on the frame rate during recording. Higher settings use segment format 5 and preserve each sample’s full precision.
+In a two-minute test with one minute of movement and turns followed by one minute at rest, 160 Hz POV
+samples added 39.5 kB to the compressed segments. The same samples in format 4 added 78.2 kB.
 
 Native recordings save player chat as it reaches the chat window, including server masking and client chat
 filters. During playback, imported player messages use their recorded display text and filter masks without

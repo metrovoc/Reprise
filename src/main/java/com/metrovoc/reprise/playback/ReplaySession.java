@@ -502,7 +502,7 @@ public final class ReplaySession {
                     return;
                 }
                 case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
-                case Actions.POV_SAMPLES -> readPov();
+                case Actions.POV_SAMPLES, Actions.PACKED_POV -> readPov(action);
                 case Actions.CHUNK_REF -> deliverChunk(Varints.read(this.reader));
                 case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                 case Actions.SNAPSHOT_END -> { }
@@ -568,7 +568,7 @@ public final class ReplaySession {
                 }
                 case Actions.SNAPSHOT_END -> snapshot = false;
                 case Actions.SNAPSHOT_TICK -> { }
-                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES -> {
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV -> {
                     int length = Varints.read(buf);
                     byte[] bytes = new byte[length];
                     buf.get(bytes);
@@ -589,8 +589,8 @@ public final class ReplaySession {
         }
     }
 
-    private void readPov() {
-        var sample = new PovSamples(ByteBuffer.wrap(readBytes()));
+    private void readPov(int action) {
+        var sample = new PovSamples(ByteBuffer.wrap(readBytes()), action == Actions.PACKED_POV);
         pendingPov.put(sample.entityId, sample);
     }
 
@@ -669,7 +669,7 @@ public final class ReplaySession {
                         beforeFirstBoundary = false;
                     }
                     case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()), -1, beforeFirstBoundary);
-                    case Actions.POV_SAMPLES -> readPov();
+                    case Actions.POV_SAMPLES, Actions.PACKED_POV -> readPov(action);
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
                     case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                     default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");

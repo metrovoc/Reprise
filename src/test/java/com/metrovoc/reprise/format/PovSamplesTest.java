@@ -20,13 +20,31 @@ class PovSamplesTest {
         assertEquals(-165, track.at(2).yaw());
     }
 
-    @Test void nativeSamplesUseTheImportedWireLayout() {
+    @Test void packedAndOriginalSamplesProduceIdenticalPoses() {
         var poses = new PovSamples.Pose[] {
             new PovSamples.Pose(2, 4, 8, 175, -30),
             new PovSamples.Pose(4, 8, 4, -165, 10)
         };
-        assertArrayEquals(samplePair().array(), PovSamples.encode(3, poses));
-        assertEquals(500, new PovSamples(ByteBuffer.wrap(PovSamples.encode(500, poses))).entityId);
+        var packed = new PovSamples(ByteBuffer.wrap(PovSamples.encodePacked(500, poses)), true);
+        var original = new PovSamples(samplePair());
+        assertEquals(500, packed.entityId);
+        for (int i = 0; i <= 32; i++) assertEquals(original.at(i / 32f), packed.at(i / 32f));
+    }
+
+    @Test void packedChannelsPreserveSignedZeroAndFullPrecision() {
+        var points = new PovSamples.Pose[13];
+        for (int i = 0; i < points.length; i++) {
+            points[i] = new PovSamples.Pose(-1234.5678, i % 2 == 0 ? -0.0 : 0.0, Math.nextUp(1.25 * i),
+                (float) (1.25 * i - 5), -12.5f);
+        }
+        var bytes = PovSamples.encodePacked(2, points);
+        // ID, count, mask, first pose, then only Y, Z and yaw vary.
+        assertEquals(3 + 32 + 12 * 20, bytes.length);
+        var packed = new PovSamples(ByteBuffer.wrap(bytes), true);
+        for (int i : new int[]{0, 3, 6, 9, 12}) assertEquals(points[i], packed.at(i / 12f));
+        assertThrows(IllegalArgumentException.class, () -> new PovSamples(ByteBuffer.wrap(bytes).limit(bytes.length - 1), true));
+        bytes[2] |= 32;
+        assertThrows(IllegalArgumentException.class, () -> new PovSamples(ByteBuffer.wrap(bytes), true));
     }
 
     @Test void rejectsIncompleteAndNonfiniteInput() {

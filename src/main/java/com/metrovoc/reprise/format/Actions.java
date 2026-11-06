@@ -18,6 +18,10 @@ public final class Actions {
     /** Length-prefixed sub-tick camera samples for a recorded entity. */
     public static final int POV_SAMPLES = 6;
 
+    /** Version 5 native POV batches store each changing channel as XORs of consecutive IEEE values. */
+    public static final int PACKED_POV_VERSION = 5;
+    public static final int PACKED_POV = 7;
+
     /** Ends one recorded client tick. No payload. */
     public static final int TICK = 0;
     /** A clientbound play packet: varint length, then the packet as the game codec writes it (id + body). */

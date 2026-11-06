@@ -152,7 +152,7 @@ public final class ReplayWriter {
         }
     }
 
-    void povSamples(byte[] bytes) { action(Actions.POV_SAMPLES, bytes); }
+    void povSamples(byte[] bytes) { action(Actions.PACKED_POV, bytes); }
 
     public void gamePacket(byte[] bytes) {
         action(Actions.GAME_PACKET, bytes);

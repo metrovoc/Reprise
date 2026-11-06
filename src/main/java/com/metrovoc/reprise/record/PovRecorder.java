@@ -35,7 +35,7 @@ final class PovRecorder {
             append(1, boundary);
             for (int i = 1; i < samples.length; i++) {
                 if (!samples[0].equals(samples[i])) {
-                    bytes = PovSamples.encode(player.getId(), samples);
+                    bytes = PovSamples.encodePacked(player.getId(), samples);
                     break;
                 }
             }

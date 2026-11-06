@@ -388,7 +388,7 @@ public final class Recorder {
         this.snapshotPending = false;
         this.resetPending = false;
         this.segmentTicks = 0;
-        this.writer.submit(w -> w.beginSegment(reset, pov == null ? Actions.VERSION : Actions.POV_SAMPLES_VERSION));
+        this.writer.submit(w -> w.beginSegment(reset, pov == null ? Actions.VERSION : Actions.PACKED_POV_VERSION));
         SnapshotBuilder.write(this, this.minecraft, this.spawnData, this.self::spawn);
         this.writer.submit(w -> {
             if (samples != null) w.povSamples(samples);
