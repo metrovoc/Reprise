@@ -264,6 +264,12 @@ public final class ReplaySession {
         this.mc.setCameraEntity(this.mc.player);
     }
 
+    public static boolean showingRecordedHotbar() {
+        if (active == null) return false;
+        Entity camera = active.mc.getCameraEntity();
+        return camera != active.mc.player && active.filter.hasHotbarFor(camera) && !camera.isSpectator();
+    }
+
     public int recorderId() {
         return this.recorderId;
     }

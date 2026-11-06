@@ -1,6 +1,10 @@
 package com.metrovoc.reprise.playback;
 
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.level.GameType;
@@ -8,9 +12,19 @@ import net.minecraft.world.level.GameType;
 /** Adapts recorded packets to a viewer: the camera is a spectator, and seeking stays silent. */
 final class PlaybackFilter {
     private final ReplaySession session;
+    private Player hotbarOwner;
+
+    boolean hasHotbarFor(Entity player) {
+        return player != null && player == hotbarOwner;
+    }
 
     PlaybackFilter(ReplaySession session) {
         this.session = session;
+    }
+
+    private Player recorder() {
+        var level = Minecraft.getInstance().level;
+        return level != null && level.getEntity(session.recorderId()) instanceof Player player ? player : null;
     }
 
     Packet<? super ClientGamePacketListener> apply(Packet<? super ClientGamePacketListener> packet) {
@@ -20,6 +34,7 @@ final class PlaybackFilter {
                 return com.metrovoc.reprise.record.ReplayPayloads.records(custom.payload()) ? packet : null;
             }
             case ClientboundLoginPacket login -> {
+                hotbarOwner = null;
                 this.session.setRecorderId(login.playerId());
                 return new ClientboundLoginPacket(ReplaySession.CAMERA_ID, login.hardcore(), login.levels(), login.maxPlayers(),
                     login.chunkRadius(), login.simulationDistance(), login.reducedDebugInfo(), false, login.doLimitedCrafting(),
@@ -27,6 +42,37 @@ final class PlaybackFilter {
             }
             case ClientboundRespawnPacket respawn -> {
                 return new ClientboundRespawnPacket(spectator(respawn.commonPlayerSpawnInfo()), respawn.dataToKeep());
+            }
+            case ClientboundSetHeldSlotPacket selected -> {
+                Player player = recorder();
+                if (player != null && Inventory.isHotbarSlot(selected.slot())) {
+                    player.getInventory().setSelectedSlot(selected.slot());
+                    hotbarOwner = player;
+                }
+                return null;
+            }
+            case ClientboundSetPlayerInventoryPacket item -> {
+                Player player = recorder();
+                if (player != null && Inventory.isHotbarSlot(item.slot())) player.getInventory().setItem(item.slot(), item.contents());
+                return null;
+            }
+            case ClientboundSetHealthPacket health -> {
+                Player player = recorder();
+                if (player != null) {
+                    player.setHealth(health.getHealth());
+                    player.getFoodData().setFoodLevel(health.getFood());
+                    player.getFoodData().setSaturation(health.getSaturation());
+                }
+                return null;
+            }
+            case ClientboundSetExperiencePacket xp -> {
+                Player player = recorder();
+                if (player != null) {
+                    player.experienceLevel = xp.getExperienceLevel();
+                    player.experienceProgress = xp.getExperienceProgress();
+                    player.totalExperience = xp.getTotalExperience();
+                }
+                return null;
             }
             case ClientboundGameEventPacket event -> {
                 var type = event.getEvent();

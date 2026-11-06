@@ -287,7 +287,7 @@ public final class PlaybackControls {
         int h = g.guiHeight();
         int barW = Math.min(360, w - 40);
         int x = (w - barW) / 2;
-        int y = h - 14;
+        int y = h - (ReplaySession.showingRecordedHotbar() ? 70 : 14);
         HUD_TIMELINE.setBounds(x, y, barW, 6);
         HUD_TIMELINE.draw(g, mc.font, session, session.visualTick(partialTick), null, false);
         String state = (session.isPlaying() ? "▶ " : "❚❚ ") + Timecode.format(session.visualTick(partialTick)) + " / "

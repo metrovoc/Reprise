@@ -1,0 +1,30 @@
+# Enable recordHotbar and run with -PsegmentTicks=40.
+world
+cmd gamerule send_command_feedback false
+gui 2
+cmd difficulty normal
+cmd gamemode survival
+cmd item replace entity @s armor.head with minecraft:diamond_helmet
+cmd experience set @s 7 levels
+vitals 16 13
+cmd item replace entity @s hotbar.0 with minecraft:oak_planks 12
+cmd item replace entity @s hotbar.3 with minecraft:diamond_sword
+cmd item replace entity @s weapon.offhand with minecraft:shield
+cmd effect give @s minecraft:speed infinite 1 false
+slot minecraft:oak_planks
+wait 30
+record start
+wait 15
+shot hud_live
+slot minecraft:diamond_sword
+cmd item replace entity @s hotbar.0 with minecraft:oak_planks 5
+cmd item replace entity @s armor.head with minecraft:iron_helmet
+cmd attribute @s minecraft:scale base set 1.5
+cmd experience set @s 12 levels
+vitals 12 9
+wait 50
+cmd item replace entity @s hotbar.0 with minecraft:air
+cmd effect clear @s minecraft:speed
+wait 45
+record stop
+quit

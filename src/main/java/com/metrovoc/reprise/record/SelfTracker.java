@@ -15,6 +15,11 @@ import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
+import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
+import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
+import net.minecraft.network.protocol.game.ClientboundSetPlayerInventoryPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.Mth;
@@ -36,6 +41,11 @@ final class SelfTracker {
     private boolean lastOnGround;
     private final Map<Integer, Object> lastData = new java.util.HashMap<>();
     private final Map<EquipmentSlot, ItemStack> lastEquipment = new EnumMap<>(EquipmentSlot.class);
+    private final boolean recordHotbar = com.metrovoc.reprise.RepriseConfig.RECORD_HOTBAR.get();
+    private final ItemStack[] lastHotbar = new ItemStack[net.minecraft.world.entity.player.Inventory.getSelectionSize()];
+    private int lastSelected;
+    private float lastHealth, lastSaturation, lastExperience;
+    private int lastFood, lastLevel, lastTotalExperience;
     private boolean wasSwinging;
     private int lastSwingTime;
     private int spawnedId = Integer.MIN_VALUE;
@@ -68,6 +78,8 @@ final class SelfTracker {
         if (!attributes.isEmpty()) {
             this.recorder.writeGame(new ClientboundUpdateAttributesPacket(player.getId(), attributes));
         }
+        player.getActiveEffects().forEach(effect -> this.recorder.writeGame(new ClientboundUpdateMobEffectPacket(player.getId(), effect, false)));
+        writeHotbar(player, true);
         writeEquipment(player, true);
         rememberPose(player);
     }
@@ -94,6 +106,7 @@ final class SelfTracker {
         }
         rememberPose(player);
         writeDataChanges(player);
+        writeHotbar(player, false);
         writeEquipment(player, false);
         writeSwing(player);
     }
@@ -139,15 +152,46 @@ final class SelfTracker {
         return value instanceof ItemStack stack ? stack.copy() : value;
     }
 
+    private void writeHotbar(LocalPlayer player, boolean snapshot) {
+        if (!this.recordHotbar) return;
+        var food = player.getFoodData();
+        if (snapshot || player.getHealth() != lastHealth || food.getFoodLevel() != lastFood || food.getSaturationLevel() != lastSaturation) {
+            lastHealth = player.getHealth();
+            lastFood = food.getFoodLevel();
+            lastSaturation = food.getSaturationLevel();
+            this.recorder.writeGame(new ClientboundSetHealthPacket(lastHealth, lastFood, lastSaturation));
+        }
+        if (snapshot || player.experienceProgress != lastExperience || player.experienceLevel != lastLevel || player.totalExperience != lastTotalExperience) {
+            lastExperience = player.experienceProgress;
+            lastLevel = player.experienceLevel;
+            lastTotalExperience = player.totalExperience;
+            this.recorder.writeGame(new ClientboundSetExperiencePacket(lastExperience, lastTotalExperience, lastLevel));
+        }
+        var inventory = player.getInventory();
+        int selected = inventory.getSelectedSlot();
+        if (snapshot || selected != this.lastSelected) {
+            this.recorder.writeGame(new ClientboundSetHeldSlotPacket(selected));
+            this.lastSelected = selected;
+        }
+        for (int i = 0; i < this.lastHotbar.length; i++) {
+            ItemStack item = inventory.getItem(i);
+            if (snapshot || !ItemStack.matches(item, this.lastHotbar[i])) {
+                if (!snapshot || !item.isEmpty()) this.recorder.writeGame(new ClientboundSetPlayerInventoryPacket(i, item));
+                this.lastHotbar[i] = item.copy();
+            }
+        }
+    }
+
     private void writeEquipment(LocalPlayer player, boolean all) {
         List<Pair<EquipmentSlot, ItemStack>> changed = new ArrayList<>();
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             ItemStack stack = player.getItemBySlot(slot);
             ItemStack last = this.lastEquipment.getOrDefault(slot, ItemStack.EMPTY);
             if (all ? !stack.isEmpty() : !ItemStack.matches(stack, last)) {
-                changed.add(Pair.of(slot, stack.copy()));
+                ItemStack saved = stack.copy();
+                changed.add(Pair.of(slot, saved));
+                this.lastEquipment.put(slot, saved);
             }
-            this.lastEquipment.put(slot, stack.copy());
         }
         if (!changed.isEmpty()) {
             this.recorder.writeGame(new ClientboundSetEquipmentPacket(player.getId(), changed));

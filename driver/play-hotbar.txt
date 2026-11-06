@@ -1,0 +1,30 @@
+replay latest
+wait 60
+gui 2
+replay no_hotbar
+replay spectate
+replay seek 4
+replay hotbar 0 0 minecraft:oak_planks 12
+replay hotbar 0 3 minecraft:diamond_sword 1
+replay speed_effect true
+replay vitals 16 13 7 1
+replay equipment HEAD minecraft:diamond_helmet
+replay equipment OFFHAND minecraft:shield
+shot hotbar_initial
+replay seek 32
+replay vitals 12 9 12 1.5
+replay equipment HEAD minecraft:iron_helmet
+replay seek 52
+replay hotbar 3 0 minecraft:oak_planks 5
+replay hotbar 3 3 minecraft:diamond_sword 1
+replay speed_effect true
+replay vitals 12 9 12 1.5
+shot hotbar_sword
+replay seek 100
+replay hotbar 3 0 minecraft:air 0
+replay speed_effect false
+replay seek 10
+replay vitals 16 13 7 1
+replay hotbar 0 0 minecraft:oak_planks 12
+replay speed_effect true
+quit

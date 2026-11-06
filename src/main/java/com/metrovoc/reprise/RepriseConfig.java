@@ -7,6 +7,7 @@ public final class RepriseConfig {
     public static final ModConfigSpec.BooleanValue AUTO_RECORD_SINGLEPLAYER;
     public static final ModConfigSpec.BooleanValue AUTO_RECORD_MULTIPLAYER;
     public static final ModConfigSpec.BooleanValue SHOW_RECORDING_INDICATOR;
+    public static final ModConfigSpec.BooleanValue RECORD_HOTBAR;
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
@@ -17,6 +18,8 @@ public final class RepriseConfig {
             .translation("reprise.configuration.autoRecordMultiplayer").define("autoRecordMultiplayer", false);
         SHOW_RECORDING_INDICATOR = b.comment("Show a red dot and the recorded time while recording")
             .translation("reprise.configuration.showIndicator").define("showIndicator", true);
+        RECORD_HOTBAR = b.comment("Record your nine hotbar slots, selection, health, food and experience for first-person replay")
+            .translation("reprise.configuration.recordHotbar").define("recordHotbar", false);
         b.pop();
         SPEC = b.build();
     }

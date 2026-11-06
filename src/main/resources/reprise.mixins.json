@@ -28,6 +28,7 @@
     "playback.RenderSectionMixin",
     "playback.EntityVisibilityMixin",
     "playback.HandRenderingMixin",
+    "playback.RecordedHotbarMixin",
     "playback.ItemInHandRendererMixin",
     "export.LibraryMixin",
     "export.SoundEngineMixin"

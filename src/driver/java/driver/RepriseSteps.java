@@ -52,6 +52,16 @@ public final class RepriseSteps {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,
             net.neoforged.neoforge.client.event.ViewportEvent.RenderFog.class, RepriseSteps::recordFog);
         Driver.STEPS.put("pixels", FrameChecks::verify);
+        Driver.STEPS.put("vitals", (mc, arg) -> {
+            var id = mc.player.getUUID();
+            String[] values = arg.split(" ");
+            mc.getSingleplayerServer().execute(() -> {
+                var player = mc.getSingleplayerServer().getPlayerList().getPlayer(id);
+                player.setHealth(Float.parseFloat(values[0]));
+                player.getFoodData().setFoodLevel(Integer.parseInt(values[1]));
+                player.getFoodData().setSaturation(0);
+            });
+        });
         Driver.STEPS.put("record", (mc, arg) -> {
             switch (arg) {
                 case "start" -> Recorder.start();
@@ -148,6 +158,42 @@ public final class RepriseSteps {
                     mc.player.snapTo(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]),
                         Float.parseFloat(a[4]), Float.parseFloat(a[5]));
                     mc.player.setOldPosAndRot();
+                }
+                case "hotbar" -> {
+                    var player = (net.minecraft.world.entity.player.Player) mc.level.getEntity(s.recorderId());
+                    int slot = Integer.parseInt(a[2]);
+                    var item = player.getInventory().getItem(slot);
+                    String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem()).toString();
+                    if (!ReplaySession.showingRecordedHotbar() || player.getInventory().getSelectedSlot() != Integer.parseInt(a[1])
+                        || !id.equals(a[3]) || item.getCount() != Integer.parseInt(a[4])) {
+                        throw new IllegalStateException("Hotbar " + player.getInventory().getSelectedSlot() + ", slot " + slot + ": " + item
+                            + ", visible=" + ReplaySession.showingRecordedHotbar());
+                    }
+                }
+                case "no_hotbar" -> {
+                    if (ReplaySession.showingRecordedHotbar()) throw new IllegalStateException("Unexpected recorded hotbar");
+                }
+                case "vitals" -> {
+                    var player = (net.minecraft.world.entity.player.Player) mc.level.getEntity(s.recorderId());
+                    double scale = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.SCALE);
+                    if (player.getHealth() != Float.parseFloat(a[1]) || player.getFoodData().getFoodLevel() != Integer.parseInt(a[2])
+                        || player.experienceLevel != Integer.parseInt(a[3]) || scale != Double.parseDouble(a[4])) {
+                        throw new IllegalStateException("Recorded health/food/level/scale: " + player.getHealth() + "/"
+                            + player.getFoodData().getFoodLevel() + "/" + player.experienceLevel + "/" + scale);
+                    }
+                }
+                case "equipment" -> {
+                    var player = (net.minecraft.world.entity.player.Player) mc.level.getEntity(s.recorderId());
+                    var item = player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.valueOf(a[1]));
+                    if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem()).toString().equals(a[2])) {
+                        throw new IllegalStateException("Unexpected equipment in " + a[1] + ": " + item);
+                    }
+                }
+                case "speed_effect" -> {
+                    var player = (net.minecraft.world.entity.player.Player) mc.level.getEntity(s.recorderId());
+                    if (player.hasEffect(net.minecraft.world.effect.MobEffects.SPEED) != Boolean.parseBoolean(a[1])) {
+                        throw new IllegalStateException("Unexpected Speed effect state");
+                    }
                 }
                 case "spectate" -> {
                     s.spectate(mc.level.getEntity(s.recorderId()));

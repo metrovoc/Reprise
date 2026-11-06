@@ -176,6 +176,7 @@
   "reprise.configuration.autoRecordSingleplayer.tooltip": "Start recording whenever a singleplayer world opens",
   "reprise.configuration.autoRecordMultiplayer": "Record servers automatically",
   "reprise.configuration.autoRecordMultiplayer.tooltip": "Start recording whenever you join a server",
+  "reprise.configuration.recordHotbar": "Record my hotbar and HUD",
   "reprise.configuration.showIndicator": "Recording indicator",
   "reprise.configuration.showIndicator.tooltip": "Show a red dot and the recorded time while recording",
   "reprise.editor.names.on": "Names: On",

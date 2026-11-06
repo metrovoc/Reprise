@@ -207,7 +207,7 @@ public final class Recorder {
             case ClientboundSetEntityMotionPacket motion when motion.id() == selfId -> {
                 return null;
             }
-            case ClientboundUpdateAttributesPacket attributes when attributes.getEntityId() == selfId -> {
+            case ClientboundSetEquipmentPacket equipment when equipment.getEntity() == selfId -> {
                 return null;
             }
             default -> {

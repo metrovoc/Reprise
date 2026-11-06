@@ -18,7 +18,10 @@ installed.
   repaired and saved the next time you open the replay list.
 
 Reprise records world updates and registered clientbound mod payloads during play. It also records your own movement,
-held items, swings, block breaking, block placement and sounds.
+held items, swings, block breaking, block placement and sounds. To capture all nine hotbar slots, stack
+counts, selection, food and experience, enable **Record my hotbar and HUD** in the mod's recording settings
+before starting a recording. When you spectate the recording player, their items and applicable survival
+HUD appear below the replay timeline.
 
 ## Watching
 
