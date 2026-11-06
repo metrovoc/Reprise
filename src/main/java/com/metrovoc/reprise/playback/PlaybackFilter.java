@@ -32,6 +32,8 @@ final class PlaybackFilter {
         if (com.metrovoc.reprise.record.Recorder.liveOnly(packet)) return null;
         boolean fast = this.session.isFastForwarding();
         switch (packet) {
+            // Imported wire streams include framing that the live network pipeline normally removes.
+            case ClientboundBundleDelimiterPacket ignored -> { return null; }
             case net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom -> {
                 return com.metrovoc.reprise.record.ReplayPayloads.records(custom.payload()) ? packet : null;
             }

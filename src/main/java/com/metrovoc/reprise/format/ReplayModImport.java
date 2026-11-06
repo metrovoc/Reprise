@@ -54,9 +54,13 @@ public final class ReplayModImport {
             var packets = zip.getEntry("recording.tmcpr");
             if (header == null || packets == null) throw new IOException("Missing ReplayMod metadata or packet stream");
             var m = json(zip, header).getAsJsonObject();
-            if (!"MCPR".equals(m.get("fileFormat").getAsString()) || m.get("fileFormatVersion").getAsInt() != 14
-                || m.get("protocol").getAsInt() != SharedConstants.getProtocolVersion()) {
-                throw new IOException("Choose a format 14 ReplayMod recording from this Minecraft protocol version.");
+            int protocol = m.get("protocol").getAsInt();
+            boolean legacy = protocol == 767 && SharedConstants.getProtocolVersion() == 775;
+            if (!"MCPR".equals(m.get("fileFormat").getAsString()) || m.get("fileFormatVersion").getAsInt() != 14) {
+                throw new IOException("Choose a format 14 ReplayMod recording.");
+            }
+            if (!legacy && protocol != SharedConstants.getProtocolVersion()) {
+                throw new IOException("Unsupported ReplayMod recording protocol " + protocol);
             }
             var meta = new ReplayMeta();
             meta.name = source.getFileName().toString().replaceFirst("(?i)\\.mcpr$", "");
@@ -107,9 +111,15 @@ public final class ReplayModImport {
                 // entries while spooling the smaller timeline separately, then append it to the ZIP.
                 Path timeline = Files.createTempFile(destination, ".timeline-", ".part");
                 try {
-                    try (var in = new DataInputStream(new BufferedInputStream(zip.getInputStream(packets)));
-                         var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)))) {
-                        readPackets(in, packets.getSize(), data, out, meta, segment, duration, packs);
+                    try (var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)))) {
+                        if (legacy) {
+                            LegacyMcpr.read(zip, packets, destination, (input, size) ->
+                                readPackets(input, size, data, out, meta, segment, duration, packs));
+                        } else {
+                            try (var input = new DataInputStream(new BufferedInputStream(zip.getInputStream(packets)))) {
+                                readPackets(input, packets.getSize(), data, out, meta, segment, duration, packs);
+                            }
+                        }
                     }
                     out.putNextEntry(new ZipEntry(segment.file));
                     Files.copy(timeline, out);
@@ -120,6 +130,12 @@ public final class ReplayModImport {
             });
         } catch (RuntimeException e) {
             throw new IOException("Invalid ReplayMod recording: " + e.getMessage(), e);
+        }
+    }
+
+    static void checkFrame(int time, int previous, int size, long remaining) throws IOException {
+        if (time < previous || size < 0 || size > remaining || size > 64 * 1024 * 1024) {
+            throw new IOException("Invalid ReplayMod packet header at " + time + " ms");
         }
     }
 
@@ -140,9 +156,7 @@ public final class ReplayModImport {
             int time = in.readInt();
             int size = in.readInt();
             remaining -= 8;
-            if (time < previous || size < 0 || size > remaining || size > 64 * 1024 * 1024) {
-                throw new IOException("Invalid ReplayMod packet header at " + time + " ms");
-            }
+            checkFrame(time, previous, size, remaining);
             previous = time;
             if (size == 0) continue;
             byte[] bytes = new byte[size];

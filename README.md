@@ -38,7 +38,12 @@ packets, terrain, recorder and entity movement, snapshot boundaries, and markers
 require compatible client mods and registries. Mid-segment connection reconfiguration is unsupported.
 Flashback editor projects, optional sub-tick camera samples, and wall-clock timing are outside the import.
 
-**ReplayMod MCPR.** Import format 14 recordings made with the Minecraft 26.1.2 network protocol.
+**ReplayMod MCPR.** Minecraft 26.1.2 format 14 recordings import directly. For Minecraft 1.21 and
+1.21.1 recordings (protocol 767), put `replaymod-26.1-2.6.28.jar` in the game directory’s
+`reprise/converters/` folder, then import the MCPR as usual. Reprise uses the bundled ReplayStudio
+library to translate the packets locally. Mod-specific data needs compatible registries and client mods.
+[Download the converter from ReplayMod’s release page.](https://modrinth.com/mod/replaymod/version/5LxshONI)
+
 Recorded packets and markers use the 20-tick timeline. Playback opens when the recording player and terrain
 first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
 connection configuration and includes embedded server resource packs.
