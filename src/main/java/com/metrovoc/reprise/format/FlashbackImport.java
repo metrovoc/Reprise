@@ -1,6 +1,7 @@
 package com.metrovoc.reprise.format;
 
 import com.google.common.io.CountingInputStream;
+import com.google.common.io.FileBackedOutputStream;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.metrovoc.reprise.record.PacketCodecs;
@@ -31,6 +32,7 @@ import net.minecraft.network.VarInt;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
+import net.minecraft.network.protocol.configuration.ClientboundFinishConfigurationPacket;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
@@ -44,6 +46,10 @@ public final class FlashbackImport {
     private static final int MAGIC = 0xD780E884;
     private final Map<PacketType<?>, Integer> packetIds = new HashMap<>();
     private final ReplayMeta meta = new ReplayMeta();
+    private final FileBackedOutputStream handoff = new FileBackedOutputStream(2 * 1024 * 1024);
+    private final DataOutputStream handoffOut = new DataOutputStream(handoff);
+    private enum Phase { PLAY, CONFIGURATION, AWAITING_LOGIN }
+    private Phase phase = Phase.PLAY;
     private int playerId = -1;
     private int centerX = Integer.MIN_VALUE, centerZ = Integer.MIN_VALUE;
 
@@ -85,12 +91,17 @@ public final class FlashbackImport {
                         convertSegment(stream, chunk.getSize(), entry.getValue().getAsJsonObject(), out);
                     }
                 }
+                // The recorder can stop while joining the next server. With no incoming
+                // play packets, its last visible state is still the outgoing world.
+                if (phase == Phase.AWAITING_LOGIN) throw new IOException("Flashback play packets have no following world login");
                 if (meta.segments.isEmpty() || meta.durationTicks != header.get("total_ticks").getAsInt()) {
                     throw new IOException("Incomplete Flashback recording");
                 }
             });
         } catch (RuntimeException e) {
             throw new IOException("Invalid Flashback recording: " + e.getMessage(), e);
+        } finally {
+            handoff.reset();
         }
     }
 
@@ -167,23 +178,42 @@ public final class FlashbackImport {
         int snapshotSize = input.readInt();
         long snapshotEnd = progress.getCount() + snapshotSize;
         if (snapshotSize < 0 || snapshotEnd > length) throw new IOException("Invalid snapshot length");
+        // After unpausing, Flashback writes an empty snapshot and puts the full replacement
+        // world in the first timed tick. Index it at the end of that tick for seeks and cuts.
+        boolean resumed = snapshotSize == 0 && !meta.segments.isEmpty();
+        int duration = info.get("duration").getAsInt();
+        if (resumed) {
+            zip.write(Actions.TICK);
+            meta.segments.getLast().ticks = Math.incrementExact(meta.segments.getLast().ticks);
+            meta.durationTicks = Math.incrementExact(meta.durationTicks);
+            duration--;
+        }
         String file = Actions.segmentFile(meta.segments.size());
-        var segment = new ReplayMeta.Segment(file, meta.durationTicks, meta.segments.isEmpty()
+        var segment = new ReplayMeta.Segment(file, meta.durationTicks, resumed || meta.segments.isEmpty()
             || info.has("forcePlaySnapshot") && info.get("forcePlaySnapshot").getAsBoolean());
         zip.putNextEntry(new ZipEntry(file));
         var out = new DataOutputStream(new BufferedOutputStream(zip));
         out.writeInt(Actions.MAGIC);
-        out.writeInt(java.util.Arrays.asList(actions).contains(Kind.POV) ? Actions.POV_SAMPLES_VERSION : Actions.VERSION);
+        out.writeInt(java.util.Arrays.asList(actions).contains(Kind.POV) ? Actions.POV_SAMPLES_VERSION : Actions.RECONFIGURATION_VERSION);
         playerId = -1;
-        while (progress.getCount() < snapshotEnd) translate(input, progress, snapshotEnd, actions, out, true);
+        if (resumed) {
+            while (!translate(input, progress, length, actions, out, -1)) { }
+        } else {
+            while (progress.getCount() < snapshotEnd) {
+                if (translate(input, progress, snapshotEnd, actions, out, -1)) throw new IOException("Tick inside snapshot");
+            }
+        }
         if (playerId == -1) throw new IOException("Snapshot has no login packet");
         out.writeByte(Actions.SNAPSHOT_END);
         segment.actionsOffset = out.size();
         while (progress.getCount() < length) {
-            if (translate(input, progress, length, actions, out, false)) segment.ticks++;
+            if (translate(input, progress, length, actions, out, meta.durationTicks + segment.ticks + 1)) {
+                out.writeByte(Actions.TICK);
+                segment.ticks++;
+            }
         }
         out.flush();
-        if (segment.ticks != info.get("duration").getAsInt()) throw new IOException("Segment duration mismatch");
+        if (segment.ticks != duration) throw new IOException("Segment duration mismatch");
         meta.durationTicks = Math.addExact(meta.durationTicks, segment.ticks);
         meta.segments.add(segment);
     }
@@ -209,7 +239,7 @@ public final class FlashbackImport {
     }
 
     private boolean translate(DataInputStream input, CountingInputStream progress, long end,
-                              Kind[] actions, DataOutputStream out, boolean snapshot) throws IOException {
+                              Kind[] actions, DataOutputStream out, int tick) throws IOException {
         int action = readVarInt(input);
         int size = input.readInt();
         if (action < 0 || action >= actions.length || size < 0 || size > end - progress.getCount()) {
@@ -223,16 +253,14 @@ public final class FlashbackImport {
         byte[] payload = new byte[size];
         input.readFully(payload);
         var data = ByteBuffer.wrap(payload);
-        switch (actions[action]) {
+        Kind kind = actions[action];
+        if (tick >= 0 && kind != Kind.TICK) out = timedOutput(out, kind, data, tick);
+        switch (kind) {
             case TICK -> {
-                if (snapshot || size != 0) throw new IOException("Invalid tick action");
-                out.writeByte(Actions.TICK);
+                if (size != 0) throw new IOException("Invalid tick action");
                 return true;
             }
-            case CONFIG -> {
-                if (!snapshot) throw new IOException("Mid-segment configuration is unsupported.");
-                write(out, Actions.CONFIG_PACKET, data);
-            }
+            case CONFIG -> write(out, Actions.CONFIG_PACKET, data);
             case POV -> {
                 new PovSamples(data.duplicate()); // Check the wire count before publishing the recording.
                 out.writeByte(Actions.POV_SAMPLES);
@@ -258,6 +286,27 @@ public final class FlashbackImport {
             }
         }
         return false;
+    }
+
+    /** Flashback omits the handshake delimiters. Commit the incoming world on its login tick. */
+    private DataOutputStream timedOutput(DataOutputStream out, Kind kind, ByteBuffer data, int tick) throws IOException {
+        boolean login = kind == Kind.GAME && Varints.read(data.duplicate()) == packetIds.get(GamePacketTypes.CLIENTBOUND_LOGIN);
+        if (phase == Phase.PLAY) {
+            if (kind != Kind.CONFIG && !login) return out;
+            packet(handoffOut, ClientboundStartConfigurationPacket.INSTANCE);
+            phase = Phase.CONFIGURATION;
+        }
+        if (phase == Phase.CONFIGURATION && (kind == Kind.GAME || kind == Kind.CHUNK)) {
+            write(handoffOut, Actions.CONFIG_PACKET, ByteBuffer.wrap(PacketCodecs.encode(
+                PacketCodecs.CONFIG, ClientboundFinishConfigurationPacket.INSTANCE)));
+            phase = Phase.AWAITING_LOGIN;
+        }
+        if (!login) return handoffOut;
+        handoff.asByteSource().copyTo(out);
+        handoff.reset();
+        phase = Phase.PLAY;
+        if (meta.worldSwitchTicks.isEmpty() || meta.worldSwitchTicks.getLast() != tick) meta.worldSwitchTicks.add(tick);
+        return out;
     }
 
     private void game(ByteBuffer data, DataOutputStream out) throws IOException {

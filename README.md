@@ -41,7 +41,8 @@ archive that you can seek, edit, clip, and export.
 
 **Flashback ZIP.** The importer reads same-version Minecraft 26.1.2 game
 packets, terrain, recorder and entity movement, snapshot boundaries, and markers. Modded packets still
-require compatible client mods and registries. Mid-segment connection reconfiguration is unsupported.
+require compatible client mods and registries. On a server switch, the outgoing world stays visible until
+the recorded login. If the recorder paused, playback cuts to the resumed world on the first tick after the pause.
 When a recording includes extra first-person samples, spectating the recorder reproduces movement and turns
 between ticks during playback and export. The recorder’s head also follows those turns when viewed from
 another camera. Reimport the original ZIP to recover samples from an older import. Segments that declare
