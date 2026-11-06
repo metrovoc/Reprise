@@ -36,6 +36,7 @@ public final class EditorScreen extends Screen {
     private Button speedButton;
     private Button pathButton;
     private Button interpolationButton;
+    private Button namesButton;
 
     public EditorScreen(ReplaySession session) {
         super(Component.translatable("reprise.editor.title"));
@@ -51,7 +52,7 @@ public final class EditorScreen extends Screen {
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
-        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 60, 50};
+        int[] widths = {20, 14, 40, 14, 70, 70, 50, 80, 16, 16, 60, 60, 50, 64};
         int gaps = 2 * (widths.length + 2) + 12;
         int total = gaps;
         for (int w : widths) {
@@ -87,6 +88,9 @@ public final class EditorScreen extends Screen {
         this.pathButton = addRenderableWidget(Button.builder(Component.empty(), b -> CameraPath.setPreview(!CameraPath.preview())).bounds(x, y, w[7], 20)
             .tooltip(Tooltip.create(Component.translatable("reprise.editor.path.tooltip"))).build());
         x += w[7] + 2;
+        this.namesButton = addRenderableWidget(Button.builder(Component.empty(), b -> PlaybackControls.setHideNames(!PlaybackControls.hideNames()))
+            .bounds(x, y, w[13], 20).tooltip(Tooltip.create(Component.translatable("reprise.editor.names.tooltip"))).build());
+        x += w[13] + 2;
         addRenderableWidget(Button.builder(Component.literal("["), b -> setRange(true)).bounds(x, y, w[8], 20)
             .tooltip(Tooltip.create(Component.translatable("reprise.editor.range_start"))).build());
         x += w[8] + 1;
@@ -107,6 +111,7 @@ public final class EditorScreen extends Screen {
         this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
+        this.namesButton.setMessage(Component.translatable(PlaybackControls.hideNames() ? "reprise.editor.names.off" : "reprise.editor.names.on"));
         this.interpolationButton.active = this.selected != null;
         this.interpolationButton.setMessage(Component.translatable("reprise.interpolation." +
             (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));

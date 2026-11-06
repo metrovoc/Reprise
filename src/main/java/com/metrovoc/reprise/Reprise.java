@@ -17,6 +17,7 @@ public final class Reprise {
 
     public Reprise(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.CLIENT, RepriseConfig.SPEC);
+        container.registerExtensionPoint(net.neoforged.neoforge.client.gui.IConfigScreenFactory.class, net.neoforged.neoforge.client.gui.ConfigurationScreen::new);
         modBus.addListener(RepriseKeys::register);
         RecordingControls.register(NeoForge.EVENT_BUS);
         com.metrovoc.reprise.playback.PlaybackControls.register(NeoForge.EVENT_BUS);

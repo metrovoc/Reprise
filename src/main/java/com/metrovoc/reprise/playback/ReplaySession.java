@@ -644,8 +644,14 @@ public final class ReplaySession {
     private void placeCameraAtRecorder() {
         Entity recorder = this.mc.level.getEntity(this.recorderId);
         if (recorder != null) {
+            // Start a little behind and above the recording player, looking at them.
             Vec3 eye = recorder.getEyePosition();
-            this.mc.player.snapTo(eye.x, eye.y - this.mc.player.getEyeHeight(), eye.z, recorder.getYRot(), recorder.getXRot());
+            Vec3 back = Vec3.directionFromRotation(0, recorder.getYRot()).scale(-3.5).add(0, 1.2, 0);
+            Vec3 cam = eye.add(back);
+            Vec3 d = eye.subtract(cam);
+            float yaw = (float) (Math.toDegrees(Math.atan2(-d.x, d.z)));
+            float pitch = (float) (-Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z))));
+            this.mc.player.snapTo(cam.x, cam.y - this.mc.player.getEyeHeight(), cam.z, yaw, pitch);
             this.mc.player.setOldPosAndRot();
             this.cameraPlaced = true;
         }

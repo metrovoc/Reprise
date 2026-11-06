@@ -1,0 +1,24 @@
+gui 3
+wait 40
+shot ui_title
+press Replays
+wait 10
+inspect
+shot ui_browser
+replay latest
+wait 100
+key escape
+wait 5
+shot ui_pause
+key escape
+wait 5
+replay editor
+wait 5
+press Export
+wait 5
+shot ui_export
+key escape
+wait 5
+shot ui_editor
+missing reprise
+quit

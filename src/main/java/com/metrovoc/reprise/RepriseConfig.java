@@ -10,10 +10,13 @@ public final class RepriseConfig {
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
-        b.push("recording");
-        AUTO_RECORD_SINGLEPLAYER = b.comment("Start recording when a singleplayer world opens").define("autoRecordSingleplayer", false);
-        AUTO_RECORD_MULTIPLAYER = b.comment("Start recording when joining a server").define("autoRecordMultiplayer", false);
-        SHOW_RECORDING_INDICATOR = b.comment("Show a red dot while recording").define("showIndicator", true);
+        b.translation("reprise.configuration.recording").push("recording");
+        AUTO_RECORD_SINGLEPLAYER = b.comment("Start recording when a singleplayer world opens")
+            .translation("reprise.configuration.autoRecordSingleplayer").define("autoRecordSingleplayer", false);
+        AUTO_RECORD_MULTIPLAYER = b.comment("Start recording when joining a server")
+            .translation("reprise.configuration.autoRecordMultiplayer").define("autoRecordMultiplayer", false);
+        SHOW_RECORDING_INDICATOR = b.comment("Show a red dot and the recorded time while recording")
+            .translation("reprise.configuration.showIndicator").define("showIndicator", true);
         b.pop();
         SPEC = b.build();
     }

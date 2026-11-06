@@ -29,6 +29,15 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
 public final class PlaybackControls {
     private static final float[] SPEEDS = {0.05F, 0.1F, 0.25F, 0.5F, 0.75F, 1, 1.5F, 2, 4, 8, 16};
     private static final Timeline HUD_TIMELINE = new Timeline();
+    private static boolean hideNames;
+
+    public static boolean hideNames() {
+        return hideNames;
+    }
+
+    public static void setHideNames(boolean value) {
+        hideNames = value;
+    }
 
     public static void register(IEventBus bus) {
         bus.addListener(EventPriority.HIGHEST, ClientTickEvent.Pre.class, e -> tick());
@@ -55,6 +64,11 @@ public final class PlaybackControls {
             var pose = CameraPath.current();
             if (ReplaySession.isActive() && pose != null && e.usedConfiguredFov()) {
                 e.setFOV(pose.fov());
+            }
+        });
+        bus.addListener(net.neoforged.neoforge.client.event.RenderNameTagEvent.CanRender.class, e -> {
+            if (ReplaySession.isActive() && hideNames) {
+                e.setCanRender(net.minecraft.util.TriState.FALSE);
             }
         });
         bus.addListener(ScreenEvent.Init.Post.class, e -> {
