@@ -22,6 +22,8 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 
@@ -36,6 +38,13 @@ public final class PlaybackControls {
             var exporter = com.metrovoc.reprise.export.VideoExporter.running();
             if (exporter != null) {
                 exporter.afterRender();
+            }
+        });
+        bus.addListener(RenderGuiLayerEvent.Pre.class, e -> {
+            var exporter = com.metrovoc.reprise.export.VideoExporter.running();
+            if (exporter != null && exporter.capturing() && (e.getName().equals(VanillaGuiLayers.OVERLAY_MESSAGE)
+                || e.getName().equals(VanillaGuiLayers.CHAT))) {
+                e.setCanceled(true);
             }
         });
         bus.addListener(RenderGuiEvent.Post.class, e -> hud(e.getGuiGraphics(), e.getPartialTick().getGameTimeDeltaPartialTick(false)));

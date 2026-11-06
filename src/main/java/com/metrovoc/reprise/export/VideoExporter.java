@@ -143,7 +143,7 @@ public final class VideoExporter {
         this.savedVsync = options.enableVsync().get();
         this.savedVolume = options.getSoundSourceOptionInstance(SoundSource.MASTER).get();
         this.savedFade = options.chunkSectionFadeInTime().get();
-        options.hideGui = true;
+        options.hideGui = settings.hideHud;
         options.framerateLimit().set(260);
         options.enableVsync().set(false);
         this.savedMusic = options.getSoundSourceOptionInstance(SoundSource.MUSIC).get();
@@ -195,6 +195,17 @@ public final class VideoExporter {
         Reprise.LOGGER.info("Exporting ticks {}..{} as {} frames at {}x{}", exporter.start, exporter.end, exporter.totalFrames,
             exporter.width, exporter.height);
     }
+
+    public boolean includesHud() {
+        return !this.settings.hideHud;
+    }
+
+    public boolean handsOnly() {
+        return this.settings.hideHud && this.settings.handsOnly;
+    }
+
+    public int outputWidth() { return this.width; }
+    public int outputHeight() { return this.height; }
 
     public int renderWidth() {
         return this.renderWidth;

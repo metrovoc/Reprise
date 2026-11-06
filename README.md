@@ -94,7 +94,10 @@ Keyframes and settings are saved with each replay, in `reprise/projects/`.
 ## Exporting
 
 *Export* in the editor renders the selected range to `reprise/exports/`. Frames are rendered at a fixed time step,
-so the video is smooth however fast your computer is. The GUI is left out, and the export waits for every chunk in view
+so the video is smooth however fast your computer is. Exports start with the HUD hidden. In the export screen,
+choose **HUD: On** to include gameplay overlays and first-person hands, or **Hands only** for a first-person
+shot with a clean screen. Spectate the recorder to include their recorded hotbar and survival stats. The export
+waits for every chunk in view
 to finish building. With Sodium, Reprise requests synchronous terrain rendering during export. With Iris, shader time
 follows the replay and the shader frame counter advances once per exported frame.
 

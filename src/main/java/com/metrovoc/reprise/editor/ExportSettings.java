@@ -24,6 +24,7 @@ public final class ExportSettings {
     public int quality = 18;
     public Format format = Format.MP4_H264;
     public boolean hideHud = true;
+    public boolean handsOnly;
     public boolean audio = false;
     public boolean transparentSky;
     public boolean supersample;

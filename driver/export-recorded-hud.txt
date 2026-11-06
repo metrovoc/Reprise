@@ -1,0 +1,30 @@
+# Run after record-hotbar.txt on a fresh project.
+replay latest
+wait 60
+gui 2
+replay spectate
+replay range 5 55
+replay export_settings 360 640 20 PNG_SEQUENCE ssaa
+replay editor
+press Export
+press HUD: Off
+press Queue (0)
+field Shot_name_(optional) Portrait
+press Add current shot
+press Back
+press HUD: On
+press Queue (1)
+field Shot_name_(optional) Hands
+press Add current shot
+press Back
+press Hands only
+replay exit
+wait 30
+replay latest
+wait 60
+replay editor
+press Export
+press Queue (2)
+press Render queue
+wait 220
+quit

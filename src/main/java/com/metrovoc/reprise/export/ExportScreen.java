@@ -51,7 +51,7 @@ public final class ExportScreen extends Screen {
             updateEncoder();
             updateAlpha();
         });
-        cycle(x, y + 24, w, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
+        cycle(x, y + 24, w - 68, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
             int i = 0;
             for (int j = 0; j < RESOLUTIONS.length; j++) {
                 if (RESOLUTIONS[j][0] == this.settings.width && RESOLUTIONS[j][1] == this.settings.height) {
@@ -93,6 +93,19 @@ public final class ExportScreen extends Screen {
             this.session.project().save();
             updateAlpha();
         }).bounds(x, y + 120, w, 20).build());
+        cycle(x + w - 64, y + 24, 64,
+            () -> Component.translatable(!this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
+            () -> {
+                if (!this.settings.hideHud) {
+                    this.settings.hideHud = true;
+                    this.settings.handsOnly = true;
+                } else if (this.settings.handsOnly) {
+                    this.settings.handsOnly = false;
+                } else {
+                    this.settings.hideHud = false;
+                }
+            })
+            .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
         updateAlpha();
 
         addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 147, w / 2 - 2, 20).build());
