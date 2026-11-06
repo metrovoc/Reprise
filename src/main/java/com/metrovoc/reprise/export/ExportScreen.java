@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 /** Export settings: format, resolution, frame rate and quality. */
 public final class ExportScreen extends Screen {
     private static final int[][] RESOLUTIONS = {{1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}, {1080, 1920}, {1080, 1080}};
+    private static final int[][] PANORAMAS = {{1024, 512}, {2048, 1024}, {4096, 2048}, {6144, 3072}, {8192, 4096}};
     private static final int[] FRAME_RATES = {24, 30, 60, 120};
     private static final int[] QUALITIES = {12, 16, 18, 23, 28};
 
@@ -46,20 +47,25 @@ public final class ExportScreen extends Screen {
         int w = 200;
         int x = this.width / 2 - w / 2;
         int y = this.height / 2 - 92;
-        cycle(x, y, w, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
+        cycle(x, y, w - 76, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
             ExportSettings.Format[] all = ExportSettings.Format.values();
             this.settings.format = all[(this.settings.format.ordinal() + 1) % all.length];
             updateEncoder();
             updatePasses();
         });
-        cycle(x, y + 24, w - 68, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
+        cycle(x + w - 72, y, 72, () -> Component.translatable(settings.panorama ? "reprise.export.panorama" : "reprise.export.flat"), () -> {
+            settings.panorama = !settings.panorama;
+            rebuildWidgets();
+        });
+        cycle(x, y + 24, w - 68, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + (settings.panorama ? settings.width / 2 : settings.height)), () -> {
+            var sizes = settings.panorama ? PANORAMAS : RESOLUTIONS;
             int i = 0;
-            for (int j = 0; j < RESOLUTIONS.length; j++) {
-                if (RESOLUTIONS[j][0] == this.settings.width && RESOLUTIONS[j][1] == this.settings.height) {
+            for (int j = 0; j < sizes.length; j++) {
+                if (sizes[j][0] == this.settings.width && (settings.panorama || sizes[j][1] == this.settings.height)) {
                     i = j + 1;
                 }
             }
-            int[] r = RESOLUTIONS[i % RESOLUTIONS.length];
+            int[] r = sizes[i % sizes.length];
             this.settings.width = r[0];
             this.settings.height = r[1];
         });
@@ -97,8 +103,8 @@ public final class ExportScreen extends Screen {
         this.depthButton = cycle(x + 117, y + 120, w - 117,
             this::depthLabel, () -> this.settings.depthMap = !this.settings.depthMap);
         this.depthButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.depth.tooltip")));
-        cycle(x + w - 64, y + 24, 64,
-            () -> Component.translatable(!this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
+        var hud = cycle(x + w - 64, y + 24, 64,
+            () -> Component.translatable(settings.panorama ? "reprise.export.hud.off" : !this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
             () -> {
                 if (!this.settings.hideHud) {
                     this.settings.hideHud = true;
@@ -108,8 +114,9 @@ public final class ExportScreen extends Screen {
                 } else {
                     this.settings.hideHud = false;
                 }
-            })
-            .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
+            });
+        hud.active = !settings.panorama;
+        hud.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
         updatePasses();
 
         addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 147, w / 2 - 2, 20).build());

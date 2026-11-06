@@ -27,16 +27,20 @@ final class FfmpegSink implements FrameSink {
             if (settings.format == ExportSettings.Format.MP4_H265) {
                 cmd.addAll(List.of("-tag:v", "hvc1"));
             }
-            cmd.addAll(List.of("-movflags", "+faststart"));
         } else {
             String q = String.valueOf(settings.quality);
             switch (settings.format) {
-                case MP4_H264 -> cmd.addAll(List.of("-c:v", "libx264", "-preset", "slow", "-crf", q, "-pix_fmt", "yuv420p", "-movflags", "+faststart"));
-                case MP4_H265 -> cmd.addAll(List.of("-c:v", "libx265", "-preset", "medium", "-crf", q, "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-movflags", "+faststart"));
+                case MP4_H264 -> cmd.addAll(List.of("-c:v", "libx264", "-preset", "slow", "-crf", q, "-pix_fmt", "yuv420p"));
+                case MP4_H265 -> cmd.addAll(List.of("-c:v", "libx265", "-preset", "medium", "-crf", q, "-pix_fmt", "yuv420p", "-tag:v", "hvc1"));
                 case WEBM_VP9 -> cmd.addAll(List.of("-c:v", "libvpx-vp9", "-crf", q, "-b:v", "0", "-row-mt", "1", "-pix_fmt", "yuv420p"));
                 case MOV_PRORES -> cmd.addAll(List.of("-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"));
                 case PNG_SEQUENCE -> throw new IllegalArgumentException("PNG sequences are written without ffmpeg");
             }
+        }
+        if (settings.supportsHardware() && !settings.panorama) cmd.addAll(List.of("-movflags", "+faststart"));
+        if (settings.panorama && settings.format == ExportSettings.Format.WEBM_VP9) {
+            // Stage VP9 in ISO BMFF so FFmpeg can carry the spherical side data into WebM on remux.
+            cmd.addAll(List.of("-f", "mp4"));
         }
         cmd.add(output.toString());
         Reprise.LOGGER.info("Starting {}", String.join(" ", cmd));

@@ -146,6 +146,10 @@ waits for every chunk in view
 to finish building. With Sodium, Reprise requests synchronous terrain rendering during export. With Iris, shader time
 follows the replay and the shader frame counter advances once per exported frame.
 
+- Choose **360°** in place of **Flat** to export a full equirectangular panorama. The output is twice as wide as
+  it is tall. The camera path sets the forward view, and all six directions use the same replay instant. Video
+  files carry spherical projection metadata for 360° players. Panoramas capture the world without first-person
+  hands or HUD overlays, and the optional stereo soundtrack follows the forward view.
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
 - H.264 and H.265 support CPU encoding with constant quality, or GPU encoding with a target bitrate.
   Reprise tests the chosen resolution and frame rate before starting a GPU export. It checks VideoToolbox on
@@ -154,7 +158,7 @@ follows the replay and the shader frame counter advances once per exported frame
   It works with video and PNG, including transparent exports.
 - For compositing, choose **PNG sequence** and enable **Depth**. Each color frame has a matching
   `frame_000000.depth.exr` with a 32-bit float `Z` channel. Values are distances along the camera’s viewing axis
-  in blocks. Pixels without a world depth value are positive infinity. Hands and HUD appear only in the color pass.
+  in blocks. In a 360° export, depth is radial distance from the camera. Pixels without a world depth value are positive infinity. Hands and HUD appear only in the color pass.
   At 2×2 SSAA, depth uses the nearest of the four surfaces at each pixel.
 - **Transparent sky** exports straight alpha in PNG sequences and ProRes 4444. For a character cutout, hide terrain
   and clouds in **Scene layers** and choose clear weather. Each output frame samples the same instant against black

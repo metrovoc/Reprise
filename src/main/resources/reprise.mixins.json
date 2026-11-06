@@ -23,6 +23,7 @@
     "playback.ClientPacketListenerMixin",
     "export.DeltaTrackerTimerMixin",
     "export.WindowMixin",
+    "export.PanoramaCameraMixin",
     "export.IrisTimerMixin",
     "export.IrisFrameCounterMixin",
     "export.GameRendererMixin",

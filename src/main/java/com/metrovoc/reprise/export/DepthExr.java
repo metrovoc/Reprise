@@ -27,7 +27,8 @@ final class DepthExr {
         header.writeBytes(value);
     }
 
-    static void write(Path file, int width, int height, byte[] pixels, float m22, float m32, boolean zeroToOne) throws IOException {
+    static void write(Path file, int width, int height, byte[] pixels, float m22, float m32, boolean zeroToOne,
+                      float[] radialScale) throws IOException {
         var header = new ByteArrayOutputStream();
         header.writeBytes(little(8).putInt(20000630).putInt(2).array());
         var channels = new ByteArrayOutputStream();
@@ -62,7 +63,8 @@ final class DepthExr {
                     for (int x = 0; x < width; x++) {
                         float depth = raw.getFloat();
                         double ndc = zeroToOne ? depth : 2.0 * depth - 1.0;
-                        block.putFloat(depth == 1.0f ? Float.POSITIVE_INFINITY : (float) (m32 / (ndc + m22)));
+                        float scale = radialScale == null ? 1 : radialScale[(height - y - 1) * width + x];
+                        block.putFloat(depth == 1.0f ? Float.POSITIVE_INFINITY : (float) (scale * m32 / (ndc + m22)));
                     }
                 }
                 int size = block.position();

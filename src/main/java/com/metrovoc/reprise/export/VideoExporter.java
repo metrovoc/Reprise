@@ -72,6 +72,10 @@ public final class VideoExporter {
     private boolean progressFrame;
     private int pendingReadbacks;
     private final int renderWidth, renderHeight;
+    private final Panorama panorama;
+    private static final Panorama.Face[] FACES = Panorama.Face.values();
+    private int faceIndex;
+    private final int captureWidth, captureHeight;
     private TextureTarget downsampled;
     private final boolean withDepth;
     private DepthPass depthPass;
@@ -99,16 +103,20 @@ public final class VideoExporter {
         this.returnTo = returnTo;
         this.start = session.project().start();
         this.end = session.project().end(session.duration());
-        this.width = settings.width & ~1;
-        this.height = settings.height & ~1;
+        this.width = settings.width & (settings.panorama ? ~3 : ~1);
+        this.height = settings.panorama ? this.width / 2 : settings.height & ~1;
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
-        if (this.width < 2 || this.height < 2 || this.width > max / scale || this.height > max / scale) {
+        this.captureWidth = settings.panorama ? width / 4 : width;
+        this.captureHeight = settings.panorama ? captureWidth : height;
+        if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
+            || captureWidth > max / scale || captureHeight > max / scale) {
             throw new IllegalArgumentException(Component.translatable("reprise.export.size_limit", (long) this.width * scale,
                 (long) this.height * scale, max).getString());
         }
-        this.renderWidth = this.width * scale;
-        this.renderHeight = this.height * scale;
+        this.renderWidth = captureWidth * scale;
+        this.renderHeight = captureHeight * scale;
+        this.panorama = settings.panorama ? new Panorama(width, height, captureWidth, withDepth) : null;
         this.schedule = session.project().frameSchedule(this.start, this.end, settings.fps);
         if (this.schedule.frameCount() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("This range exceeds the supported video frame count");
@@ -156,7 +164,7 @@ public final class VideoExporter {
         this.savedVsync = options.enableVsync().get();
         this.savedVolume = options.getSoundSourceOptionInstance(SoundSource.MASTER).get();
         this.savedFade = options.chunkSectionFadeInTime().get();
-        options.hideGui = settings.hideHud;
+        options.hideGui = settings.hideHud || panorama != null;
         options.framerateLimit().set(260);
         options.enableVsync().set(false);
         this.savedMusic = options.getSoundSourceOptionInstance(SoundSource.MUSIC).get();
@@ -209,12 +217,14 @@ public final class VideoExporter {
             exporter.width, exporter.height);
     }
 
+    public Panorama.Face panoramaFace() { return panorama == null ? null : FACES[faceIndex]; }
+
     public boolean includesHud() {
-        return !this.settings.hideHud;
+        return panorama == null && !this.settings.hideHud;
     }
 
     public boolean handsOnly() {
-        return this.settings.hideHud && this.settings.handsOnly;
+        return panorama == null && this.settings.hideHud && this.settings.handsOnly;
     }
 
     public int outputWidth() { return this.width; }
@@ -379,8 +389,14 @@ public final class VideoExporter {
                 return; // Render the same replay tick and partial tick on white.
             }
         }
+        if (panorama != null) {
+            stableFrames = 0;
+            if (++faceIndex < FACES.length) return;
+            faceIndex = 0;
+        }
         if (this.audio != null) {
             try {
+                if (panorama != null) mc.getSoundManager().updateSource(mc.gameRenderer.getMainCamera());
                 this.audio.frame();
             } catch (java.io.IOException e) {
                 this.writeError = e;
@@ -395,7 +411,7 @@ public final class VideoExporter {
     public void captureWorldDepth() {
         if (!captureThisFrame || whitePass || !withDepth) return;
         try {
-            if (depthPass == null) depthPass = new DepthPass(width, height);
+            if (depthPass == null) depthPass = new DepthPass(captureWidth, captureHeight);
             depthPass.capture(mc.getMainRenderTarget());
             depthCaptured = true;
         } catch (RuntimeException e) {
@@ -408,9 +424,9 @@ public final class VideoExporter {
         if (target.width != this.renderWidth || target.height != this.renderHeight) {
             throw new IllegalStateException("Unexpected render target size " + target.width + "×" + target.height);
         }
-        if (this.renderWidth != this.width) {
+        if (this.renderWidth != this.captureWidth) {
             if (this.downsampled == null) {
-                this.downsampled = new TextureTarget("Reprise supersampling", this.width, this.height, false);
+                this.downsampled = new TextureTarget("Reprise supersampling", captureWidth, captureHeight, false);
             }
             // A centered linear sample of an exactly 2x source averages the four covered texels.
             try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
@@ -480,7 +496,9 @@ public final class VideoExporter {
 
     private void write() {
         try {
-            int written = 0;
+            int written = 0, face = 0;
+            byte[][] colors = panorama == null ? null : new byte[FACES.length][];
+            byte[][] depths = panorama == null || !withDepth ? null : new byte[FACES.length][];
             while (true) {
                 Frame captured = this.frames.take();
                 if (captured == END) {
@@ -497,9 +515,18 @@ public final class VideoExporter {
                     }
                     AlphaMatte.combine(bytes, white);
                 }
-                if (captured.depth != null) {
-                    DepthExr.write(files.media.resolve(String.format("frame_%06d.depth.exr", written)), width, height, captured.depth,
-                        captured.m22, captured.m32, zeroToOne);
+                byte[] depth = captured.depth;
+                if (panorama != null) {
+                    colors[face] = bytes;
+                    if (withDepth) depths[face] = depth;
+                    if (++face < FACES.length) continue;
+                    face = 0;
+                    bytes = panorama.project(colors);
+                    if (withDepth) depth = panorama.project(depths);
+                }
+                if (depth != null) {
+                    DepthExr.write(files.media.resolve(String.format("frame_%06d.depth.exr", written)), width, height, depth,
+                        captured.m22, captured.m32, zeroToOne, panorama == null ? null : panorama.radialScale());
                 }
                 this.sink.frame(bytes);
                 written++;
@@ -542,12 +569,23 @@ public final class VideoExporter {
                 if (!ok) {
                     this.sink.abort();
                 }
+                if (ok && panorama != null && settings.format == ExportSettings.Format.WEBM_VP9) {
+                    SphericalMetadata.tag(files.media);
+                    if (audio == null) {
+                        Path webm = files.work.resolve("spherical.webm");
+                        ok = FfmpegSink.run(FfmpegSink.find(settings.ffmpeg), java.util.List.of("-i", files.media.toString(),
+                            "-c", "copy", webm.toString()), files.work.resolve("mux.log"));
+                        if (ok) java.nio.file.Files.move(webm, files.media, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
                 if (ok && this.audio != null) {
                     ok = this.audio.stop() && addAudio();
                     if (!ok) {
                         failure = Component.translatable("reprise.export.audio_failed");
                     }
                 }
+                if (ok && panorama != null && settings.format != ExportSettings.Format.PNG_SEQUENCE
+                    && settings.format != ExportSettings.Format.WEBM_VP9) SphericalMetadata.tag(files.media);
                 if (ok) output = this.files.publish();
             } else {
                 abortWriter();
@@ -645,6 +683,7 @@ public final class VideoExporter {
         options.getSoundSourceOptionInstance(SoundSource.MASTER).set(this.savedVolume);
         options.chunkSectionFadeInTime().set(this.savedFade);
         options.getSoundSourceOptionInstance(SoundSource.MUSIC).set(this.savedMusic);
+        if (panorama != null) mc.gameRenderer.getMainCamera().disablePanoramicMode();
         CameraPath.setForced(false);
         this.session.setPlaying(false);
         this.mc.resizeGui();

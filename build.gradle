@@ -97,6 +97,7 @@ configurations {
 
 dependencies {
     testImplementation 'com.google.code.gson:gson:2.13.2'
+    testImplementation 'org.joml:joml:1.10.8'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
