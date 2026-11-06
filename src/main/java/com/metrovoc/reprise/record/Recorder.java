@@ -4,6 +4,7 @@ import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.format.EmbeddedPacks;
 import com.metrovoc.reprise.format.ReplayMeta;
+import com.metrovoc.reprise.format.Actions;
 import io.netty.buffer.ByteBuf;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,6 +45,7 @@ public final class Recorder {
     private final Minecraft minecraft = Minecraft.getInstance();
     private final ReplayMeta meta = new ReplayMeta();
     private final ReplayWriter writer;
+    private final PovRecorder pov;
     private final SelfTracker self = new SelfTracker(this);
     private final EntitySpawnData spawnData = new EntitySpawnData();
     private StreamCodec<ByteBuf, Packet<? super ClientGamePacketListener>> gameCodec;
@@ -58,6 +60,8 @@ public final class Recorder {
     private int recordedTicks;
 
     private Recorder(ClientPacketListener connection) throws IOException {
+        int divisions = com.metrovoc.reprise.RepriseConfig.POV_DIVISIONS.get();
+        pov = divisions > 1 ? new PovRecorder(divisions) : null;
         this.connectionType = connection.getConnectionType();
         this.gameCodec = PacketCodecs.game(connection.registryAccess(), this.connectionType);
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
@@ -147,6 +151,7 @@ public final class Recorder {
             this.snapshotPending = true;
             this.resetPending = true;
         }
+        if (pov != null && paused) pov.reset();
         this.paused = paused;
     }
 
@@ -183,6 +188,7 @@ public final class Recorder {
         this.spawnData.observe(packet);
         if (packet instanceof ClientboundLoginPacket || packet instanceof ClientboundRespawnPacket) {
             this.self.respawned();
+            if (pov != null) pov.reset();
         }
         if (this.snapshotPending || this.paused) {
             return;
@@ -341,7 +347,12 @@ public final class Recorder {
         recordedPacks = applied;
     }
 
-    // Ticking, at the end of every client tick.
+    /** Observe player input at camera alignment, before later render events can change the next frame. */
+    public void sampleView(float partial) {
+        if (pov != null && !paused && !configuring && !snapshotPending && !minecraft.isPaused()) {
+            pov.frame(minecraft.player, partial);
+        }
+    }
 
     public void endTick() {
         Throwable failure = this.writer.failure();
@@ -352,28 +363,36 @@ public final class Recorder {
         }
         if (this.paused || this.configuring || this.minecraft.player == null || this.minecraft.level == null
             || this.minecraft.screen instanceof LevelLoadingScreen || this.minecraft.isPaused()) {
+            if (pov != null) pov.reset();
             return;
         }
+        byte[] samples = pov == null ? null : pov.finish(this.minecraft.player);
         if (this.snapshotPending) {
-            beginSegment(this.resetPending || this.recordedTicks == 0);
+            beginSegment(this.resetPending || this.recordedTicks == 0, null);
             return;
         }
         recordPacks(false);
         this.self.tick();
-        this.writer.submit(ReplayWriter::tick);
+        this.writer.submit(w -> {
+            if (samples != null) w.povSamples(samples);
+            w.tick();
+        });
         this.recordedTicks++;
         if (++this.segmentTicks >= SEGMENT_TICKS) {
-            beginSegment(false);
+            beginSegment(false, samples);
         }
     }
 
     /** Cut between ticks, before any packets for the next tick have been applied. */
-    private void beginSegment(boolean reset) {
+    private void beginSegment(boolean reset, byte[] samples) {
         this.snapshotPending = false;
         this.resetPending = false;
         this.segmentTicks = 0;
-        this.writer.submit(w -> w.beginSegment(reset));
+        this.writer.submit(w -> w.beginSegment(reset, pov == null ? Actions.VERSION : Actions.POV_SAMPLES_VERSION));
         SnapshotBuilder.write(this, this.minecraft, this.spawnData, this.self::spawn);
-        this.writer.submit(ReplayWriter::snapshotEnd);
+        this.writer.submit(w -> {
+            if (samples != null) w.povSamples(samples);
+            w.snapshotEnd();
+        });
     }
 }

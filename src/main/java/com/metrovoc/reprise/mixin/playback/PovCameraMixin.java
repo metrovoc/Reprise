@@ -20,6 +20,8 @@ abstract class PovCameraMixin {
     /** Apply recorded angles before vanilla places the third-person camera and export rotates cube faces. */
     @Inject(method = "alignWithEntity", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Camera;detached:Z", opcode = Opcodes.PUTFIELD))
     private void reprise$samplePov(float partial, CallbackInfo ci) {
+        var recorder = com.metrovoc.reprise.record.Recorder.active();
+        if (recorder != null) recorder.sampleView(partial);
         var session = ReplaySession.active();
         var camera = (Camera)(Object)this;
         var entity = camera.entity();

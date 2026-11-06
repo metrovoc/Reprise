@@ -238,6 +238,8 @@
   "reprise.configuration.autoRecordSingleplayer.tooltip": "Start recording whenever a singleplayer world opens",
   "reprise.configuration.autoRecordMultiplayer": "Record servers automatically",
   "reprise.configuration.autoRecordMultiplayer.tooltip": "Start recording whenever you join a server",
+  "reprise.configuration.povDivisions": "First-person samples per tick",
+  "reprise.configuration.povDivisions.tooltip": "1 records at 20 Hz. Higher values preserve movement between ticks, up to 240 Hz. Applies to the next recording.",
   "reprise.configuration.recordHotbar": "Record my hotbar and HUD",
   "reprise.configuration.showIndicator": "Recording indicator",
   "reprise.configuration.showIndicator.tooltip": "Show a red dot and the recorded time while recording",

@@ -128,6 +128,10 @@ public final class ReplayWriter {
     // Everything below runs on the writer thread.
 
     public void beginSegment(boolean reset) {
+        beginSegment(reset, Actions.VERSION);
+    }
+
+    void beginSegment(boolean reset, int version) {
         try {
             closeSegment();
             int index = this.meta.segments.size();
@@ -135,7 +139,7 @@ public final class ReplayWriter {
             this.meta.segments.add(this.currentSegment);
             this.segment = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(this.dir.resolve(this.currentSegment.file)), 1 << 16));
             this.segment.writeInt(Actions.MAGIC);
-            this.segment.writeInt(Actions.VERSION);
+            this.segment.writeInt(version);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -147,6 +151,8 @@ public final class ReplayWriter {
             this.segment = null;
         }
     }
+
+    void povSamples(byte[] bytes) { action(Actions.POV_SAMPLES, bytes); }
 
     public void gamePacket(byte[] bytes) {
         action(Actions.GAME_PACKET, bytes);

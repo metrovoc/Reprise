@@ -20,6 +20,15 @@ class PovSamplesTest {
         assertEquals(-165, track.at(2).yaw());
     }
 
+    @Test void nativeSamplesUseTheImportedWireLayout() {
+        var poses = new PovSamples.Pose[] {
+            new PovSamples.Pose(2, 4, 8, 175, -30),
+            new PovSamples.Pose(4, 8, 4, -165, 10)
+        };
+        assertArrayEquals(samplePair().array(), PovSamples.encode(3, poses));
+        assertEquals(500, new PovSamples(ByteBuffer.wrap(PovSamples.encode(500, poses))).entityId);
+    }
+
     @Test void rejectsIncompleteAndNonfiniteInput() {
         assertThrows(IllegalArgumentException.class, () -> new PovSamples(samplePair().limit(65)));
         assertThrows(IllegalArgumentException.class, () -> new PovSamples(samplePair().putFloat(62, Float.NaN)));

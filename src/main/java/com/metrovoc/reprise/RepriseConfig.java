@@ -9,6 +9,8 @@ public final class RepriseConfig {
     public static final ModConfigSpec.BooleanValue SHOW_RECORDING_INDICATOR;
     public static final ModConfigSpec.BooleanValue RECORD_HOTBAR;
 
+    public static final ModConfigSpec.IntValue POV_DIVISIONS;
+
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         b.translation("reprise.configuration.recording").push("recording");
@@ -20,6 +22,8 @@ public final class RepriseConfig {
             .translation("reprise.configuration.showIndicator").define("showIndicator", true);
         RECORD_HOTBAR = b.comment("Record your nine hotbar slots, selection, health, food and experience for first-person replay")
             .translation("reprise.configuration.recordHotbar").define("recordHotbar", false);
+        POV_DIVISIONS = b.comment("First-person sample intervals per game tick (1 uses ordinary tick recording)")
+            .translation("reprise.configuration.povDivisions").defineInRange("povDivisions", 1, 1, 12);
         b.pop();
         SPEC = b.build();
     }

@@ -24,6 +24,10 @@ counts, selection, food and experience, enable **Record my hotbar and HUD** in t
 before starting a recording. When you spectate the recording player, their items and applicable survival
 HUD appear below the replay timeline.
 
+For smoother first-person turns, set **First-person samples per tick** before recording. The default of 1
+uses ordinary 20 Hz recording. A value of 8 samples the rendered movement at 160 Hz for playback and export.
+The detail available depends on the frame rate during recording. Higher settings use segment format 4.
+
 Native recordings save player chat as it reaches the chat window, including server masking and client chat
 filters. During playback, imported player messages use their recorded display text and filter masks without
 requiring the original server’s chat session.

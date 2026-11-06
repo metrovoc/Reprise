@@ -1,12 +1,20 @@
 package com.metrovoc.reprise.format;
 
 import com.metrovoc.reprise.util.Varints;
+import io.netty.buffer.Unpooled;
 import java.nio.ByteBuffer;
+import net.minecraft.network.VarInt;
 import net.minecraft.util.Mth;
 
 /** Equally spaced samples of one entity's feet position and view angles across one recorded tick. */
 public final class PovSamples {
-    public record Pose(double x, double y, double z, float yaw, float pitch) {}
+    public record Pose(double x, double y, double z, float yaw, float pitch) {
+        public Pose interpolate(Pose to, double fraction) {
+            return new Pose(Mth.lerp(fraction, x, to.x), Mth.lerp(fraction, y, to.y), Mth.lerp(fraction, z, to.z),
+                Mth.wrapDegrees(Mth.rotLerp((float) fraction, yaw, to.yaw)),
+                Mth.wrapDegrees(Mth.rotLerp((float) fraction, pitch, to.pitch)));
+        }
+    }
     private static final int STRIDE = 3 * Double.BYTES + 2 * Float.BYTES;
     private final ByteBuffer samples;
     public final int entityId;
@@ -29,12 +37,28 @@ public final class PovSamples {
         int last = samples.limit() / STRIDE - 1;
         double t = Math.clamp((double) fraction, 0, 1) * last;
         int first = (int) t;
-        int a = first * STRIDE, b = Math.min(first + 1, last) * STRIDE;
-        double f = t - first;
-        return new Pose(Mth.lerp(f, samples.getDouble(a), samples.getDouble(b)),
-            Mth.lerp(f, samples.getDouble(a + 8), samples.getDouble(b + 8)),
-            Mth.lerp(f, samples.getDouble(a + 16), samples.getDouble(b + 16)),
-            Mth.wrapDegrees(Mth.rotLerp((float) f, samples.getFloat(a + 24), samples.getFloat(b + 24))),
-            Mth.wrapDegrees(Mth.rotLerp((float) f, samples.getFloat(a + 28), samples.getFloat(b + 28))));
+        Pose start = pose(first);
+        return t == first ? start : start.interpolate(pose(first + 1), t - first);
+    }
+
+    private Pose pose(int index) {
+        int a = index * STRIDE;
+        return new Pose(samples.getDouble(a), samples.getDouble(a + 8), samples.getDouble(a + 16),
+            Mth.wrapDegrees(samples.getFloat(a + 24)), Mth.wrapDegrees(samples.getFloat(a + 28)));
+    }
+
+    public static byte[] encode(int entityId, Pose[] samples) {
+        int header = VarInt.getByteSize(entityId) + VarInt.getByteSize(samples.length);
+        var buffer = Unpooled.wrappedBuffer(new byte[header + samples.length * STRIDE]).clear();
+        try {
+            VarInt.write(buffer, entityId);
+            VarInt.write(buffer, samples.length);
+            for (Pose pose : samples) {
+                buffer.writeDouble(pose.x).writeDouble(pose.y).writeDouble(pose.z).writeFloat(pose.yaw).writeFloat(pose.pitch);
+            }
+            return buffer.array();
+        } finally {
+            buffer.release();
+        }
     }
 }
