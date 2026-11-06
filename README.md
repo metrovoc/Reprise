@@ -162,6 +162,26 @@ with Escape or **Cancel**. Repeated exports with the same name get a numbered su
 Video formats need [ffmpeg](https://ffmpeg.org/). Reprise finds it on your `PATH`, in the usual Homebrew folders,
 or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg. With sound enabled, the sequence includes a 48 kHz stereo PCM soundtrack in `audio.wav`.
 
+## Playback measurements
+
+On a roughly 29-second Minecraft 26.1.2 route through 965 chunk coordinates, a fixed camera faced a wall that the
+recording player built after two teleports. Seeking across the placement alternated the center pixel between
+gold and sky. The seek columns measure elapsed time until both the loaded client block and its rendered
+pixel matched the target. Each is the median of 12 seeks after eight warm-up seeks.
+
+| Production client and recording | Forward seek | Backward seek | Playback FPS across three passes |
+|---|---:|---:|---:|
+| Reprise, native recording | 11 ms | 76 ms | 119.2–119.3 |
+| Reprise, imported Flashback recording | 17 ms | 69 ms | 119.2–119.3 |
+| Flashback 0.43.3, original recording | 42 ms | 89 ms | 119.6 |
+
+The last two rows use the same source recording. The native recording follows the same scripted route.
+The test used an Apple M5 Pro, a 1200×780 framebuffer, a 120 FPS cap, VSync off, a 10-chunk view distance,
+and a 3 GiB JVM heap. Reprise ran on NeoForge 26.1.2.126 and Flashback on Fabric Loader 0.19.3.
+Reprise applies seeks on the client thread. Its median backward request took 71 ms for the native
+recording and 68 ms for the import. Flashback queued its requests in under 1 ms. Loading the recording and first-time seeks
+are outside these measurements.
+
 ## Limits
 
 - A replay plays on the Minecraft version it was recorded on.

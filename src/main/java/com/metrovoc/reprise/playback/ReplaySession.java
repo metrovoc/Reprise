@@ -38,6 +38,7 @@ import net.minecraft.client.multiplayer.CommonListenerCookie;
 import net.minecraft.client.multiplayer.LevelLoadTracker;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.Connection;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.PacketListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
@@ -53,6 +54,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
@@ -63,6 +65,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.InterpolationHandler;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
@@ -98,6 +101,7 @@ public final class ReplaySession {
     private ClientConfigurationPacketListenerImpl configListener;
     private StreamCodec<ByteBuf, Packet<? super ClientGamePacketListener>> gameCodec;
     private HashCode configHash;
+    private final ReplaySkyLightCache skyLightCache = new ReplaySkyLightCache();
 
     private int segment = -1;
     private ByteBuffer reader;
@@ -208,6 +212,7 @@ public final class ReplaySession {
         }
         com.metrovoc.reprise.export.VideoExporter.sessionClosed(this);
         active = null;
+        skyLightCache.clear();
         CameraPath.setPreview(false);
         this.project.save();
         clearEmbeddedPacks();
@@ -432,6 +437,11 @@ public final class ReplaySession {
             int action = this.reader.get();
             switch (action) {
                 case Actions.TICK -> {
+                    // Chunk lighting is normally applied between frames. During a seek, later
+                    // block changes must see the light data already delivered for that terrain.
+                    if (this.fastForwarding && mc.level != null && (!mc.level.lightUpdateQueue.isEmpty() || mc.level.getLightEngine().hasLightWork())) {
+                        mc.level.update();
+                    }
                     this.tick++;
                     applyResetsAtCurrentTick();
                     return;
@@ -577,6 +587,7 @@ public final class ReplaySession {
     }
 
     private void connect(List<byte[]> config) {
+        skyLightCache.clear();
         if (this.mc.level != null) {
             this.reconnecting = true;
             try {
@@ -650,13 +661,19 @@ public final class ReplaySession {
 
     private void deliverChunk(int index) {
         try {
-            deliverGame(this.file.chunkView(index));
+            deliverGame(this.file.chunkView(index), index);
         } catch (IOException e) {
             Reprise.LOGGER.warn("Missing cached chunk {}", index, e);
         }
     }
 
-    private void deliverGame(ByteBuffer bytes) {
+    public void initializeSkyLight(LevelChunk chunk, FriendlyByteBuf input, Runnable calculate) {
+        skyLightCache.initialize(chunk, input, calculate);
+    }
+
+    private void deliverGame(ByteBuffer bytes) { deliverGame(bytes, -1); }
+
+    private void deliverGame(ByteBuffer bytes, int terrainIndex) {
         ClientPacketListener listener = this.mc.getConnection();
         if (listener == null) {
             if (this.connection != null && this.connection.getPacketListener() instanceof ClientPacketListener pending) {
@@ -686,7 +703,16 @@ public final class ReplaySession {
             yRot = this.mc.player.getYRot();
             xRot = this.mc.player.getXRot();
         }
-        deliver(packet, listener);
+        if (terrainIndex >= 0 && packet instanceof ClientboundLevelChunkWithLightPacket terrain) {
+            skyLightCache.begin(terrainIndex, terrain.getChunkData().buffer);
+            try {
+                deliver(packet, listener);
+            } finally {
+                skyLightCache.end();
+            }
+        } else {
+            deliver(packet, listener);
+        }
         if (this.fastForwarding && this.mc.level != null) {
             // No world ticks occur between these packets. Finish this move before the next packet
             // chooses between interpolating and teleporting based on the current entity position.

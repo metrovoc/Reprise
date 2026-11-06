@@ -27,6 +27,7 @@
     "export.IrisFrameCounterMixin",
     "export.GameRendererMixin",
     "playback.RenderSectionMixin",
+    "playback.LevelChunkMixin",
     "playback.EntityVisibilityMixin",
     "playback.HandRenderingMixin",
     "playback.RecordedHotbarMixin",
