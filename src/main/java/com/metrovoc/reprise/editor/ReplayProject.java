@@ -276,6 +276,30 @@ public final class ReplayProject {
         return ticks;
     }
 
+    /** Strictly adjacent timeline cue in shot time, including the ends of freeze intervals. */
+    double adjacentCue(double cursor, boolean forward, int duration, List<ReplayMeta.Marker> markers) {
+        class Neighbor {
+            double tick = forward ? duration : 0;
+            void consider(double candidate) {
+                if (forward ? candidate > cursor && candidate < tick : candidate < cursor && candidate > tick) tick = candidate;
+            }
+        }
+        var neighbor = new Neighbor();
+        neighbor.consider(start());
+        neighbor.consider(end(duration));
+        for (var key : keyframes) neighbor.consider(key.tick);
+        for (var key : speedKeys) neighbor.consider(key.tick);
+        for (var key : environment.keys) neighbor.consider(shotTick(key.tick()));
+        for (var marker : markers) neighbor.consider(shotTick(marker.tick));
+        int extra = 0;
+        for (var freeze : freezes) {
+            neighbor.consider(freeze.worldTick() + extra);
+            extra += freeze.length();
+            neighbor.consider(freeze.worldTick() + extra);
+        }
+        return neighbor.tick;
+    }
+
     public int start() {
         return Math.max(0, this.exportStart);
     }

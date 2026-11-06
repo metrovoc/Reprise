@@ -266,7 +266,7 @@ public final class PlaybackControls {
         project.checkpoint();
         double tick = session.visualTick(0);
         Keyframe k = new Keyframe();
-        k.tick = Math.round(tick);
+        k.tick = session.isPlaying() ? Math.round(tick) : tick;
         k.target = target;
         // Keyframes store the camera player's position; when spectating, take the spectated entity's eyes.
         double eyeOffset = view == mc.player ? 0 : view.getEyeHeight() - mc.player.getEyeHeight();

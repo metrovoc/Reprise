@@ -64,7 +64,7 @@ public final class EditorScreen extends Screen {
     void addTargetKey(Keyframe.Target target) {
         this.session.setPlaying(false);
         selectOnly(PlaybackControls.addKeyframe(this.session, target));
-        CameraPath.apply(CameraPath.evaluate(project().keyframes, this.session.tick(), 1));
+        CameraPath.apply(CameraPath.evaluate(project().keyframes, this.session.visualTick(0), 1));
     }
 
     private void changeTurns(int change) {
@@ -244,8 +244,8 @@ public final class EditorScreen extends Screen {
 
     private void addSpeedKey() {
         project().checkpoint();
-        int tick = this.session.tick();
-        project().speedKeys.removeIf(k -> Math.abs(k.tick - tick) < 0.5);
+        double tick = session.isPlaying() ? session.tick() : session.visualTick(1);
+        project().speedKeys.removeIf(k -> k.tick == tick);
         project().speedKeys.add(new SpeedKey(tick, this.session.speed()));
         project().sort();
         project().save();
@@ -310,13 +310,20 @@ public final class EditorScreen extends Screen {
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
         this.timeline.draw(g, this.font, this.session, shown, selection, true);
 
-        String time = Timecode.precise(shown) + " / " + Timecode.format(this.session.duration());
-        g.text(this.font, time, this.width - 10 - this.font.width(time), top + INFO_Y, 0xFFFFFFFF);
+        String position = Timecode.precise(shown);
+        if (!session.isPlaying() && scrubTick < 0) {
+            String tick = shown == Math.rint(shown) ? Long.toString((long) shown) : Double.toString(shown);
+            position = Component.translatable("reprise.editor.timeline_position", position, tick).getString();
+        }
+        String time = position + " / " + Timecode.format(this.session.duration());
+        int timeX = width - 10 - font.width(time);
+        g.text(font, time, timeX, top + INFO_Y, 0xFFFFFFFF);
         Keyframe selected = singleKey();
+        String info = "";
         if (selection.size() > 1) {
-            g.text(this.font, Component.translatable("reprise.editor.group_selected", selection.size()), 10, top + INFO_Y, 0xFFFFC94D);
+            info = Component.translatable("reprise.editor.group_selected", selection.size()).getString();
         } else if (selected != null) {
-            String info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
+            info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
             if (selected.target != null) {
                 String kind = switch (selected.target.mode()) {
                     case AIM -> "aim";
@@ -331,7 +338,17 @@ public final class EditorScreen extends Screen {
                 String name = actor == null ? "#" + selected.spectatorAfterKey : actor.getName().getString();
                 info = Component.translatable("reprise.editor.target.spectate", name, Timecode.precise(selected.tick)).getString();
             }
-            g.text(this.font, info, 10, top + INFO_Y, 0xFFFFC94D);
+        }
+        if (!info.isEmpty() && timeX > 20) {
+            int available = timeX - 16;
+            String label = info;
+            if (font.width(info) > available) {
+                label = font.plainSubstrByWidth(info, available - font.width("…")) + "…";
+                if (mouseX >= 10 && mouseX < timeX && mouseY >= top + INFO_Y && mouseY < top + INFO_Y + font.lineHeight) {
+                    g.setTooltipForNextFrame(Component.literal(info), mouseX, mouseY);
+                }
+            }
+            g.text(font, label, 10, top + INFO_Y, 0xFFFFC94D);
         }
         if (this.timeline.contains(mouseX, mouseY)) {
             double hover = this.timeline.tickAt(mouseX, this.session.duration());
@@ -394,7 +411,7 @@ public final class EditorScreen extends Screen {
         if (hit == null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             var marker = this.timeline.markerAt(this.session, event.x());
             if (marker != null && doubleClick) {
-                this.session.seek((int) project().shotTick(marker.tick));
+                jumpToCue(project().shotTick(marker.tick));
                 return true;
             }
         }
@@ -412,9 +429,7 @@ public final class EditorScreen extends Screen {
             }
             selectOnly(hit);
             if (doubleClick) {
-                this.session.seek((int) Math.round(hit.tick));
-                CameraPath.apply(CameraPath.evaluate(project().keyframes, hit.tick, 1));
-                CameraController.setRoll(hit.roll);
+                jumpToCue(hit.tick);
             } else {
                 this.dragStart = hit.tick;
                 this.dragging = hit;
@@ -498,6 +513,22 @@ public final class EditorScreen extends Screen {
         }
     }
 
+    private void jumpToCue(double tick) {
+        session.seekEditorCursor(tick);
+        timeline.reveal(tick, session.duration());
+        project().timelineView = timeline.view(session.duration());
+        selection.clear();
+        for (var key : project().keyframes) {
+            if (key.tick == tick) {
+                selectOnly(key);
+                CameraPath.apply(CameraPath.evaluate(project().keyframes, tick, 1));
+                CameraController.setRoll(key.roll);
+                break;
+            }
+        }
+        updateLabels();
+    }
+
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (RepriseKeys.OPEN_EDITOR.matches(event)) {
@@ -505,6 +536,20 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (this.dragging != null) finishDrag();
+        if (event.hasAltDown()) {
+            double cursor = session.visualTick(1);
+            switch (event.key()) {
+                case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN -> {
+                    jumpToCue(project().adjacentCue(cursor, event.key() == GLFW.GLFW_KEY_UP, session.duration(), session.meta().markers));
+                    return true;
+                }
+                case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT -> {
+                    int step = event.hasControlDown() || event.hasControlDownWithQuirk() ? 5 : 1;
+                    jumpToCue(Math.clamp(cursor + (event.key() == GLFW.GLFW_KEY_RIGHT ? step : -step), 0, session.duration()));
+                    return true;
+                }
+            }
+        }
         if (event.isSelectAll()) {
             selection.addAll(project().keyframes);
             return true;
@@ -518,7 +563,7 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (event.isPaste()) {
-            var keys = CameraKeyClipboard.decode(minecraft.keyboardHandler.getClipboard(), session.tick(), session.duration());
+            var keys = CameraKeyClipboard.decode(minecraft.keyboardHandler.getClipboard(), session.visualTick(1), session.duration());
             if (!keys.isEmpty()) {
                 project().pasteCameraKeys(keys);
                 selection.clear();

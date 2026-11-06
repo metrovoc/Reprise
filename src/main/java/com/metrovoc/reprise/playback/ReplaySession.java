@@ -116,6 +116,7 @@ public final class ReplaySession {
     private List<ReplayProject.Freeze> currentFreezes;
 
     private boolean playing;
+    private double pausedCursor = Double.NaN;
     private float speed = 1;
     private boolean fastForwarding;
     private boolean seeking;
@@ -156,7 +157,9 @@ public final class ReplaySession {
         if (this.playing && !project().freezes.isEmpty()) {
             partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
         }
-        return this.playing ? Math.max(0, tick() - 1 + partialTick) : tick();
+        int whole = tick();
+        if (playing) return Math.max(0, whole - 1 + partialTick);
+        return Double.isNaN(pausedCursor) ? whole : pausedCursor;
     }
 
     public static ReplaySession active() {
@@ -254,7 +257,10 @@ public final class ReplaySession {
     public int tick() {
         // Changing shots, undoing an import, or loading a project keeps the current world instant.
         if (currentFreezes != project().freezes) {
-            if (!project().freezes.equals(currentFreezes)) shotOffset = (int) project().shotTick(tick) - tick;
+            if (!project().freezes.equals(currentFreezes)) {
+                pausedCursor = Double.NaN;
+                shotOffset = (int) project().shotTick(tick) - tick;
+            }
             currentFreezes = project().freezes;
         }
         return this.tick + shotOffset;
@@ -297,6 +303,7 @@ public final class ReplaySession {
 
     public void setPlaying(boolean playing) {
         this.playing = playing && tick() < duration();
+        if (this.playing) pausedCursor = Double.NaN;
     }
 
     public float speed() {
@@ -403,8 +410,17 @@ public final class ReplaySession {
         return (float) (50.0 / Math.max(0.01, this.speed));
     }
 
-    /** Moves to {@code target} on the shot timeline, keeping the camera where it is. */
+    /** World state advances in whole ticks; the paused camera path retains the exact cue time. */
+    public void seekEditorCursor(double target) {
+        setPlaying(false);
+        target = Math.clamp(target, 0, duration());
+        seek((int) Math.floor(target));
+        pausedCursor = target;
+    }
+
+    /** Moves to a whole tick on the shot timeline, keeping the camera where it is. */
     public void seek(int target) {
+        pausedCursor = Double.NaN;
         target = Math.max(0, Math.min(duration(), target));
         currentFreezes = project().freezes;
         int shotTarget = target;

@@ -18,7 +18,7 @@ final class CameraKeyClipboard {
         return PREFIX + JSON.toJson(keys);
     }
 
-    static List<Keyframe> decode(String text, int cursor, int duration) {
+    static List<Keyframe> decode(String text, double cursor, int duration) {
         if (!text.startsWith(PREFIX)) return List.of();
         var keys = new ArrayList<Keyframe>();
         double previous = -1;

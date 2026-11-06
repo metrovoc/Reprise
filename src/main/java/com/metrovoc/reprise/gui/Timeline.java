@@ -52,6 +52,10 @@ public final class Timeline {
         firstTick = Math.clamp(firstTick - pixels * span(duration) / Math.max(1, width), 0, Math.max(0, duration - span(duration)));
     }
 
+    public void reveal(double tick, int duration) {
+        if (!visible(tick, duration)) firstTick = Math.clamp(tick - span(duration) / 2, 0, Math.max(0, duration - span(duration)));
+    }
+
     public void fit() {
         firstTick = 0;
         visibleTicks = Double.POSITIVE_INFINITY;

@@ -148,7 +148,7 @@
   "reprise.editor.play": "Play/Pause",
   "reprise.editor.speed": "Playback speed; click for 1×",
   "reprise.editor.keyframe": "Keyframe",
-  "reprise.editor.keyframe.tooltip": "Keyframe the camera here. Shift-click keys to select a group. Use the standard copy, cut and paste shortcuts to place it at the playhead.",
+  "reprise.editor.keyframe.tooltip": "Keyframe the camera here. Alt+Up/Down jumps between cues. Shift-click keys to select a group. Use the standard copy, cut and paste shortcuts to place it at the playhead.",
   "reprise.editor.keyframe.added": "Keyframe at %s",
   "reprise.editor.interpolation.tooltip": "How the camera moves on to the next keyframe",
   "reprise.editor.delete": "Delete",

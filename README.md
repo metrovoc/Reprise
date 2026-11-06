@@ -117,6 +117,9 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   - *Linear*: straight lines;
   - *Ease*: starts and stops gently;
   - *Hold*: stays put, then cuts.
+- In the editor, Alt+Up/Down jumps to the next or previous key, marker, freeze boundary, or export boundary.
+  Alt+Left/Right steps one tick. Hold Ctrl (Command on macOS) as well to step five. These shortcuts pause
+  playback and bring the destination into view. Fractional keys keep their exact camera time.
 - Select a camera key and choose **Edit camera key…** to enter exact coordinates, yaw, pitch, roll, field of view,
   or a fractional timeline tick. **Save key** applies the changes as one undoable edit.
 - Shift-click camera keys to select a group. Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
