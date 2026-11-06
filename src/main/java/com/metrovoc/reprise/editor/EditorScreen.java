@@ -34,6 +34,10 @@ public final class EditorScreen extends Screen {
     private final java.util.LinkedHashSet<Keyframe> selection = new java.util.LinkedHashSet<>();
 
     private boolean scrubbing;
+    private boolean choosingRange;
+    private final java.util.LinkedHashSet<Keyframe> rangePreview = new java.util.LinkedHashSet<>();
+    private boolean rangeDragged;
+    private double rangeStartX, rangeEndX;
     private CameraKeyDrag dragging;
     private boolean panning;
     private double scrubTick = -1;
@@ -306,8 +310,17 @@ public final class EditorScreen extends Screen {
         g.fill(0, top, this.width, this.height, Timeline.BACKGROUND);
         super.extractRenderState(g, mouseX, mouseY, a);
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
-        this.timeline.draw(g, this.font, this.session, shown, selection, true, dragging == null ? java.util.Map.of() : dragging.preview);
+        var displayedSelection = choosingRange && rangeDragged ? rangePreview : selection;
+        this.timeline.draw(g, this.font, this.session, shown, displayedSelection, true, dragging == null ? java.util.Map.of() : dragging.preview);
 
+        if (choosingRange && rangeDragged) {
+            int left = (int) Math.floor(Math.min(rangeStartX, rangeEndX));
+            int right = (int) Math.ceil(Math.max(rangeStartX, rangeEndX));
+            int topOfTrack = timeline.y + 10, bottom = timeline.y + timeline.height;
+            g.fill(left, topOfTrack, right + 1, bottom, 0x446DA8FF);
+            g.fill(left, topOfTrack, left + 1, bottom, 0xFF9DBFFF);
+            g.fill(right, topOfTrack, right + 1, bottom, 0xFF9DBFFF);
+        }
         String position = Timecode.precise(shown);
         if (!session.isPlaying() && scrubTick < 0) {
             String tick = shown == Math.rint(shown) ? Long.toString((long) shown) : Double.toString(shown);
@@ -318,7 +331,9 @@ public final class EditorScreen extends Screen {
         g.text(font, time, timeX, top + INFO_Y, 0xFFFFFFFF);
         Keyframe selected = singleKey();
         String info = "";
-        if (dragging != null && dragging.scaling) {
+        if (choosingRange && rangeDragged) {
+            info = Component.translatable("reprise.editor.range_selection", displayedSelection.size()).getString();
+        } else if (dragging != null && dragging.scaling) {
             info = dragging.collapsed ? Component.translatable("reprise.editor.scale_collapsed").getString()
                 : Component.translatable("reprise.editor.scale_percent", Math.round(dragging.scale * 100)).getString();
         } else if (selection.size() > 1) {
@@ -351,7 +366,7 @@ public final class EditorScreen extends Screen {
             }
             g.text(font, label, 10, top + INFO_Y, 0xFFFFC94D);
         }
-        if (this.timeline.contains(mouseX, mouseY)) {
+        if (!choosingRange && this.timeline.contains(mouseX, mouseY)) {
             double hover = this.timeline.tickAt(mouseX, this.session.duration());
             String tip = Component.translatable("reprise.editor.timeline_position", Timecode.precise(hover), Math.round(hover)).getString();
             if (!project().freezes.isEmpty()) tip = Component.translatable("reprise.editor.shot_world_time",
@@ -371,7 +386,7 @@ public final class EditorScreen extends Screen {
     @Override
     public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
         if (!this.timeline.contains(x, y)) return super.mouseScrolled(x, y, horizontal, vertical);
-        if (this.dragging == null && !this.scrubbing) {
+        if (this.dragging == null && !this.scrubbing && !choosingRange) {
             this.timeline.zoom(x, vertical, this.session.duration());
             this.timeline.pan(horizontal * 32, this.session.duration());
             project().timelineView = this.timeline.view(this.session.duration());
@@ -381,6 +396,7 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (choosingRange) return true;
         if (dragging != null) finishDrag();
         if (super.mouseClicked(event, doubleClick)) {
             return true;
@@ -394,6 +410,12 @@ public final class EditorScreen extends Screen {
                 project().timelineView = null;
             }
             this.panning = !doubleClick;
+            return true;
+        }
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.hasShiftDown()) {
+            choosingRange = true;
+            rangeDragged = false;
+            rangeStartX = rangeEndX = Math.clamp(event.x(), timeline.x, timeline.x + timeline.width);
             return true;
         }
         SpeedKey speedHit = this.timeline.speedKeyAt(this.session, event.x(), event.y());
@@ -425,10 +447,6 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (hit != null) {
-            if (event.hasShiftDown()) {
-                if (!selection.remove(hit)) selection.add(hit);
-                return true;
-            }
             if (!selection.contains(hit)) selectOnly(hit);
             if (doubleClick) {
                 jumpToCue(hit.tick);
@@ -445,6 +463,10 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (choosingRange) {
+            updateRangePreview(event.x());
+            return true;
+        }
         if (this.panning) {
             this.timeline.pan(dx, this.session.duration());
             project().timelineView = this.timeline.view(this.session.duration());
@@ -468,6 +490,20 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (choosingRange) {
+            if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                updateRangePreview(event.x());
+                if (rangeDragged) {
+                    selection.addAll(rangePreview);
+                } else {
+                    Keyframe hit = timeline.keyframeAt(session, rangeStartX, event.y());
+                    if (hit != null && !selection.remove(hit)) selection.add(hit);
+                }
+                cancelRange();
+                updateLabels();
+            }
+            return true;
+        }
         if (this.panning) {
             this.panning = false;
             return true;
@@ -485,6 +521,21 @@ public final class EditorScreen extends Screen {
         return super.mouseReleased(event);
     }
 
+    private void updateRangePreview(double x) {
+        rangeEndX = Math.clamp(x, timeline.x, timeline.x + timeline.width);
+        rangeDragged |= Math.abs(rangeEndX - rangeStartX) >= 2;
+        if (rangeDragged) {
+            rangePreview.clear();
+            rangePreview.addAll(selection);
+            timeline.selectCameraRange(session, rangeStartX, rangeEndX, rangePreview);
+        }
+    }
+
+    private void cancelRange() {
+        choosingRange = false;
+        rangePreview.clear();
+    }
+
     private void finishDrag() {
         if (!dragging.preview.isEmpty()) project().retimeCameraKeys(dragging.preview);
         else if (!dragging.moved) selectOnly(dragging.grabbed);
@@ -493,6 +544,7 @@ public final class EditorScreen extends Screen {
 
     @Override
     public void removed() {
+        cancelRange();
         dragging = null;
         this.panning = false;
         super.removed();
@@ -525,6 +577,10 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (choosingRange) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) cancelRange();
+            return true;
+        }
         if (dragging != null && event.key() == GLFW.GLFW_KEY_ESCAPE) {
             dragging = null;
             return true;

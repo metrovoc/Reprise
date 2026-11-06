@@ -197,6 +197,18 @@ public final class Timeline {
         return null;
     }
 
+    /** Add all visible camera diamonds touched by a horizontal selection, including stacked keys. */
+    public void selectCameraRange(ReplaySession session, double fromX, double toX, java.util.Set<Keyframe> selection) {
+        int duration = session.duration();
+        double left = Math.min(fromX, toX), right = Math.max(fromX, toX);
+        for (Keyframe key : session.project().keyframes) {
+            if (!visible(key.tick, duration)) continue;
+            int x = xOf(key.tick, duration);
+            int radius = key.interpolation == Keyframe.Interpolation.HOLD ? 2 : 3;
+            if (left <= x + radius && x - radius <= right) selection.add(key);
+        }
+    }
+
     public Keyframe keyframeAt(ReplaySession session, double mx, double my) {
         int duration = Math.max(1, session.duration());
         Keyframe best = null;
