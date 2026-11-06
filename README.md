@@ -57,6 +57,9 @@ The editor (`Tab`) puts a timeline under the live world. The movement keys still
   preview and the export run at that speed. Between two keys the speed changes linearly. Right-click a speed key to remove
   it.
 - `[` and `]` set where the export starts and ends.
+- **Entities** lists players and mobs at the current replay time. Search by name or UUID, then select a row to
+  spectate, hide, or outline that entity. Enter a six-digit hex color to change its outline, or set a custom name tag. These edits
+  are saved with the project and apply to video exports. Hiding a spectated player also hides their first-person hands.
 - **Names** shows or hides name tags.
 - `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
 

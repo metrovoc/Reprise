@@ -28,15 +28,6 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
 public final class PlaybackControls {
     private static final float[] SPEEDS = {0.05F, 0.1F, 0.25F, 0.5F, 0.75F, 1, 1.5F, 2, 4, 8, 16};
     private static final Timeline HUD_TIMELINE = new Timeline();
-    private static boolean hideNames;
-
-    public static boolean hideNames() {
-        return hideNames;
-    }
-
-    public static void setHideNames(boolean value) {
-        hideNames = value;
-    }
 
     public static void register(IEventBus bus) {
         bus.addListener(EventPriority.HIGHEST, ClientTickEvent.Pre.class, e -> tick());
@@ -66,8 +57,24 @@ public final class PlaybackControls {
             }
         });
         bus.addListener(net.neoforged.neoforge.client.event.RenderNameTagEvent.CanRender.class, e -> {
-            if (ReplaySession.isActive() && hideNames) {
+            ReplaySession session = ReplaySession.active();
+            if (session == null) {
+                return;
+            }
+            if (session.project().hideNames) {
                 e.setCanRender(net.minecraft.util.TriState.FALSE);
+                return;
+            }
+            var override = session.project().entityOverrides.get(e.getEntity().getUUID());
+            if (override != null && override.label() != null && e.getEntityRenderState().distanceToCameraSq < 4096) {
+                e.setContent(Component.literal(override.label()));
+                e.setCanRender(net.minecraft.util.TriState.TRUE);
+            }
+        });
+        bus.addListener(net.neoforged.neoforge.client.event.RenderNameTagEvent.DoRender.class, e -> {
+            var session = ReplaySession.active();
+            if (session != null && session.project().hideNames) {
+                e.setCanceled(true);
             }
         });
         bus.addListener(ScreenEvent.Init.Post.class, e -> {

@@ -49,6 +49,8 @@ public final class EditorScreen extends Screen {
 
     @Override
     protected void init() {
+        addRenderableWidget(Button.builder(Component.translatable("reprise.entities.title"), b ->
+            this.minecraft.setScreen(new EntityScreen(this, this.session))).bounds(6, 6, 72, 20).build());
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
@@ -88,7 +90,11 @@ public final class EditorScreen extends Screen {
         this.pathButton = addRenderableWidget(Button.builder(Component.empty(), b -> CameraPath.setPreview(!CameraPath.preview())).bounds(x, y, w[7], 20)
             .tooltip(Tooltip.create(Component.translatable("reprise.editor.path.tooltip"))).build());
         x += w[7] + 2;
-        this.namesButton = addRenderableWidget(Button.builder(Component.empty(), b -> PlaybackControls.setHideNames(!PlaybackControls.hideNames()))
+        this.namesButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            project().checkpoint();
+            project().hideNames = !project().hideNames;
+            project().save();
+        })
             .bounds(x, y, w[13], 20).tooltip(Tooltip.create(Component.translatable("reprise.editor.names.tooltip"))).build());
         x += w[13] + 2;
         addRenderableWidget(Button.builder(Component.literal("["), b -> setRange(true)).bounds(x, y, w[8], 20)
@@ -111,7 +117,7 @@ public final class EditorScreen extends Screen {
         this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
-        this.namesButton.setMessage(Component.translatable(PlaybackControls.hideNames() ? "reprise.editor.names.off" : "reprise.editor.names.on"));
+        this.namesButton.setMessage(Component.translatable(project().hideNames ? "reprise.editor.names.off" : "reprise.editor.names.on"));
         this.interpolationButton.active = this.selected != null;
         this.interpolationButton.setMessage(Component.translatable("reprise.interpolation." +
             (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));

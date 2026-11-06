@@ -41,6 +41,33 @@ public final class RepriseSteps {
                 default -> throw new IllegalArgumentException(arg);
             }
         });
+        Driver.STEPS.put("field", (mc, arg) -> {
+            String[] parts = arg.split(" ", 2);
+            for (var widget : mc.screen.children()) {
+                if (widget instanceof net.minecraft.client.gui.components.EditBox field
+                    && field.getMessage().getString().equals(parts[0].replace('_', ' '))) {
+                    field.setValue(parts[1]);
+                    return;
+                }
+            }
+            throw new IllegalStateException("No field named " + parts[0]);
+        });
+        Driver.STEPS.put("row", (mc, name) -> {
+            for (var widget : mc.screen.children()) {
+                if (widget instanceof net.minecraft.client.gui.components.ObjectSelectionList<?> list) {
+                    for (var entry : list.children()) {
+                        if (entry.getNarration().getString().startsWith(name)) {
+                            var click = new net.minecraft.client.input.MouseButtonEvent(entry.getContentXMiddle(), entry.getContentYMiddle(),
+                                new net.minecraft.client.input.MouseButtonInfo(0, 0));
+                            mc.screen.mouseClicked(click, false);
+                            mc.screen.mouseReleased(click);
+                            return;
+                        }
+                    }
+                }
+            }
+            throw new IllegalStateException("No visible row named " + name);
+        });
         Driver.STEPS.put("payload", MarkerPayload::step);
         Driver.STEPS.put("connect", (mc, arg) -> net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
             net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
@@ -90,6 +117,16 @@ public final class RepriseSteps {
                 }
                 case "dump" -> s.dump(Integer.parseInt(a[1]), Integer.parseInt(a[2]));
                 case "exit" -> s.exit();
+                case "appearance" -> {
+                    Entity target = java.util.stream.StreamSupport.stream(mc.level.entitiesForRendering().spliterator(), false)
+                        .filter(e -> e != mc.player && e.getName().getString().equals(a[1])).findFirst().orElseThrow();
+                    var override = s.project().entityOverrides.get(target.getUUID());
+                    boolean hidden = override != null && override.hidden();
+                    Integer color = override == null ? null : override.outlineColor();
+                    if (hidden != a[2].equals("hidden") || !java.util.Objects.equals(color, a.length == 4 ? Integer.valueOf(a[3], 16) : null)) {
+                        throw new IllegalStateException("Unexpected appearance for " + a[1] + ": " + override);
+                    }
+                }
                 case "state" -> {
                     int entities = 0;
                     for (Entity ignored : mc.level.entitiesForRendering()) {

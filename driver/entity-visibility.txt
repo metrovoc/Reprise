@@ -1,0 +1,65 @@
+# Run after record-play.txt with a new replay project.
+replay latest
+wait 70
+replay seek 30
+replay camera -3 -60 0 0 0
+replay keyframe
+wait 20
+replay appearance Cow visible
+shot cow_visible
+replay editor
+press Entities
+field Search_by_name_or_UUID cow
+row Cow
+wait 2
+field Outline_color_(hex) FF00FF
+press Outline
+field Name_tag Meadow
+press Set name
+shot entities_list
+press Done
+replay close
+wait 5
+replay appearance Cow visible FF00FF
+shot cow_outline
+replay editor
+press Names: On
+replay close
+wait 5
+shot cow_no_label
+replay editor
+press Names: Off
+press Entities
+field Search_by_name_or_UUID Meadow
+row Cow
+wait 2
+press Hide
+press Done
+replay close
+replay seek 5
+replay seek 30
+wait 10
+replay appearance Cow hidden FF00FF
+shot cow_hidden
+replay exit
+wait 30
+replay latest
+wait 50
+replay seek 30
+replay camera -3 -60 0 0 0
+wait 10
+replay appearance Cow hidden FF00FF
+shot cow_reopened
+replay export 640 360 20 PNG_SEQUENCE
+wait 170
+replay editor
+press Entities
+row Cow
+wait 2
+press Show
+replay appearance Cow visible FF00FF
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE
+wait 170
+quit

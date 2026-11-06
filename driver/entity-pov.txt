@@ -1,0 +1,47 @@
+# Run after record-pov.txt with a new replay project.
+replay latest
+wait 50
+replay seek 75
+replay editor
+press Entities
+row Dev
+wait 2
+press Spectate
+wait 10
+shot visible_sword
+replay editor
+press Entities
+row Dev
+wait 2
+press Hide
+press Done
+replay close
+wait 10
+replay appearance Dev hidden
+shot hidden_sword
+replay editor
+key ctrl+z
+replay close
+wait 6
+replay appearance Dev visible
+shot undo_sword
+replay editor
+key ctrl+shift+z
+replay close
+wait 6
+replay appearance Dev hidden
+shot redo_sword
+replay seek 20
+replay seek 75
+wait 5
+shot hidden_sword_seek
+replay editor
+press Entities
+row Dev
+wait 2
+press Show
+press Done
+replay close
+wait 10
+shot restored_sword
+quit

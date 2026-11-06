@@ -388,7 +388,17 @@ public final class Driver {
             case "scroll" -> mc.screen.mouseScrolled(mouseX, mouseY, 0, Double.parseDouble(arg));
             case "key" -> {
                 // through the game's own keyboard handler: screens, key bindings and Escape to pause all respond
-                KeyEvent key = new KeyEvent(GLFW.class.getField("GLFW_KEY_" + arg.toUpperCase(Locale.ROOT)).getInt(null), 0, 0);
+                String[] keys = arg.toUpperCase(Locale.ROOT).split("\\+");
+                int modifiers = 0;
+                for (int i = 0; i < keys.length - 1; i++) {
+                    modifiers |= switch (keys[i]) {
+                        case "CTRL" -> GLFW.GLFW_MOD_CONTROL;
+                        case "SHIFT" -> GLFW.GLFW_MOD_SHIFT;
+                        case "ALT" -> GLFW.GLFW_MOD_ALT;
+                        default -> throw new IllegalArgumentException("Unknown modifier " + keys[i]);
+                    };
+                }
+                KeyEvent key = new KeyEvent(GLFW.class.getField("GLFW_KEY_" + keys[keys.length - 1]).getInt(null), 0, modifiers);
                 Method press = KeyboardHandler.class.getDeclaredMethod("keyPress", long.class, int.class, KeyEvent.class);
                 press.setAccessible(true);
                 press.invoke(mc.keyboardHandler, mc.getWindow().handle(), GLFW.GLFW_PRESS, key);
@@ -660,10 +670,22 @@ public final class Driver {
     }
 
     private static AbstractWidget widget(Minecraft mc, String label) {
-        return mc.screen.children().stream()
-                .filter(c -> c instanceof AbstractWidget w && w.getMessage().getString().startsWith(label))
-                .map(AbstractWidget.class::cast).findFirst()
-                .orElseThrow(() -> new IllegalStateException("no widget labelled " + label + " (see inspect)"));
+        AbstractWidget prefix = null;
+        for (var child : mc.screen.children()) {
+            if (child instanceof AbstractWidget widget) {
+                String text = widget.getMessage().getString();
+                if (text.equals(label)) {
+                    return widget;
+                }
+                if (prefix == null && text.startsWith(label)) {
+                    prefix = widget;
+                }
+            }
+        }
+        if (prefix == null) {
+            throw new IllegalStateException("no widget labelled " + label + " (see inspect)");
+        }
+        return prefix;
     }
 
     private static int intField(AbstractContainerScreen<?> screen, String name) throws ReflectiveOperationException {

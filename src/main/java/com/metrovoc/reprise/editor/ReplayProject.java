@@ -9,10 +9,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /** What a user builds on top of a replay: the camera path and export settings. Saved per replay. */
 public final class ReplayProject {
+    public record EntityOverride(String name, boolean hidden, Integer outlineColor, String label) {}
+
+    public boolean hideNames;
+    public Map<UUID, EntityOverride> entityOverrides = new HashMap<>();
+
+    public void setEntityOverride(UUID id, String name, boolean hidden, Integer outlineColor, String label) {
+        checkpoint();
+        if (!hidden && outlineColor == null && label == null) {
+            this.entityOverrides.remove(id);
+        } else {
+            this.entityOverrides.put(id, new EntityOverride(name, hidden, outlineColor, label));
+        }
+        save();
+    }
+
     public List<Keyframe> keyframes = new ArrayList<>();
     public List<SpeedKey> speedKeys = new ArrayList<>();
     /** The part of the replay to export, in ticks; -1 for the whole replay. */
@@ -79,6 +97,8 @@ public final class ReplayProject {
         }
         to.add(ReplayMeta.GSON.toJson(this));
         ReplayProject state = ReplayMeta.GSON.fromJson(from.remove(from.size() - 1), ReplayProject.class);
+        this.hideNames = state.hideNames;
+        this.entityOverrides = state.entityOverrides;
         this.keyframes = state.keyframes;
         this.speedKeys = state.speedKeys == null ? new ArrayList<>() : state.speedKeys;
         this.exportStart = state.exportStart;
