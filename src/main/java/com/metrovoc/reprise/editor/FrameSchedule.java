@@ -9,11 +9,12 @@ public final class FrameSchedule {
     private record Span(double tick, double limit, double speed, double slope, double videoStart, double videoEnd) {}
 
     private final List<Span> spans = new ArrayList<>();
-    private final int start, end, fps;
+    private final int start, end;
+    private final double fps;
     private final long count;
 
-    public FrameSchedule(List<SpeedKey> keys, int start, int end, int fps) {
-        if (fps <= 0) throw new IllegalArgumentException("Frame rate must be positive");
+    public FrameSchedule(List<SpeedKey> keys, int start, int end, double fps) {
+        if (!Double.isFinite(fps) || fps <= 0) throw new IllegalArgumentException("Frame rate must be positive");
         this.start = start;
         this.end = end;
         this.fps = fps;

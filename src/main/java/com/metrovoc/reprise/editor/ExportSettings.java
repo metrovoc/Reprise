@@ -26,7 +26,17 @@ public final class ExportSettings {
 
     public int width = 1920;
     public int height = 1080;
+    /** Rate numerator; projects saved with integer frame rates use the default denominator of one. */
     public int fps = 60;
+    public int fpsDenominator = 1;
+
+    public FrameRate frameRate() { return new FrameRate(fps, fpsDenominator); }
+
+    public void setFrameRate(FrameRate rate) {
+        fps = rate.numerator();
+        fpsDenominator = rate.denominator();
+    }
+
     /** Constant-quality factor for the H.264/H.265/VP9 encoders: lower is better; 18 looks lossless to most eyes. */
     public int quality = 18;
     public Format format = Format.MP4_H264;
@@ -83,6 +93,25 @@ public final class ExportSettings {
         if (cubeMap) return outputWidth() / 4 * 3;
         if (omnidirectionalStereo) return width & ~3;
         return panorama ? (width & ~3) / 2 : height & ~1;
+    }
+
+    public int captureWidth() {
+        return switch (projection()) {
+            case ODS, PANORAMA -> sphereWidth() / 4;
+            case CUBE -> outputWidth() / 4;
+            case STEREO -> outputWidth() / 2;
+            case FLAT -> outputWidth();
+        };
+    }
+
+    public int captureHeight() {
+        return spherical() || cubeMap ? captureWidth() : outputHeight();
+    }
+
+    public boolean fitsDevice(int maxTextureSize) {
+        int limit = maxTextureSize / (supersample ? 2 : 1);
+        return outputWidth() >= 2 && outputHeight() >= 2 && (long) outputWidth() * outputHeight() <= Integer.MAX_VALUE / 4
+            && captureWidth() <= limit && captureHeight() <= limit;
     }
 
     public boolean supportsHardware() {

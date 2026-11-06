@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.export;
 
+import com.metrovoc.reprise.editor.FrameRate;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.editor.ExportSettings;
@@ -78,6 +79,7 @@ public final class VideoExporter {
     private final Panorama panorama;
     private final boolean stereo;
     private final boolean ods;
+    private final FrameRate frameRate;
     private boolean rightEye;
     private Vec3 stereoCenter;
     private static final Panorama.Face[] FACES = Panorama.Face.values();
@@ -103,6 +105,7 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
+        this.frameRate = settings.frameRate();
         this.ods = settings.projection() == ExportSettings.Projection.ODS;
         if (ods && (sodium || ShaderPacks.active())) {
             throw new IllegalStateException(Component.translatable("reprise.export.ods_renderer").getString());
@@ -124,15 +127,9 @@ public final class VideoExporter {
         this.height = settings.outputHeight();
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
-        this.captureWidth = switch (settings.projection()) {
-            case ODS, PANORAMA -> settings.sphereWidth() / 4;
-            case CUBE -> width / 4;
-            case STEREO -> width / 2;
-            case FLAT -> width;
-        };
-        this.captureHeight = settings.spherical() || settings.cubeMap ? captureWidth : height;
-        if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
-            || captureWidth > max / scale || captureHeight > max / scale) {
+        this.captureWidth = settings.captureWidth();
+        this.captureHeight = settings.captureHeight();
+        if (!settings.fitsDevice(max)) {
             throw new IllegalArgumentException(Component.translatable("reprise.export.size_limit", (long) this.width * scale,
                 (long) this.height * scale, max).getString());
         }
@@ -140,7 +137,7 @@ public final class VideoExporter {
         this.renderHeight = captureHeight * scale;
         this.panorama = settings.spherical() ? new Panorama(width, ods ? height / 2 : height, captureWidth, withDepth) : null;
         this.captureFaces = panorama != null ? panorama.captureFaces : settings.cubeMap ? List.of(FACES) : List.of();
-        this.schedule = session.project().frameSchedule(this.start, this.end, settings.fps);
+        this.schedule = session.project().frameSchedule(this.start, this.end, frameRate.value());
         if (this.schedule.frameCount() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("This range exceeds the supported video frame count");
         }
@@ -170,7 +167,7 @@ public final class VideoExporter {
                 opened = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.files.media, this.files.work.resolve("encode.log"));
             }
             this.audio = settings.audio ? new AudioCapture(this.files.work.resolve(sequence ? "audio.wav" : "audio.f32"),
-                settings.fps, this.totalFrames, sequence) : null;
+                frameRate, this.totalFrames, sequence) : null;
             this.sink = opened;
         } catch (Exception e) {
             if (opened != null) opened.abort();
@@ -283,7 +280,7 @@ public final class VideoExporter {
     }
 
     public float frameDurationSeconds() {
-        return 1.0f / this.settings.fps;
+        return (float) (1.0 / frameRate.value());
     }
 
     public int totalFrames() {

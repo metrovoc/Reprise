@@ -281,12 +281,12 @@ public final class ReplayProject {
         return (float) (50 * (previewClock.videoTimeAt(tick + 1.0) - previewClock.videoTimeAt(tick)));
     }
 
-    public FrameSchedule frameSchedule(int start, int end, int fps) {
+    public FrameSchedule frameSchedule(int start, int end, double fps) {
         return new FrameSchedule(this.speedKeys, start, end, fps);
     }
 
     /** Materializes the schedule for callers that need an array of frame times. */
-    public double[] frameTicks(int start, int end, int fps) {
+    public double[] frameTicks(int start, int end, double fps) {
         var schedule = frameSchedule(start, end, fps);
         double[] ticks = new double[Math.toIntExact(schedule.frameCount())];
         for (int i = 0; i < ticks.length; i++) ticks[i] = schedule.tickAt(i);

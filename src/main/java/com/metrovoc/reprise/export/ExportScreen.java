@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.export;
 
+import com.metrovoc.reprise.editor.FrameRate;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.editor.ExportSettings;
 import com.metrovoc.reprise.editor.ReplayProject;
@@ -44,10 +45,11 @@ public final class ExportScreen extends Screen {
 
     @Override
     protected void init() {
+        error = null;
         updateOutputSummary();
         this.shaders = ShaderPacks.active();
         this.ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
-        int w = 200;
+        int w = 280;
         int x = this.width / 2 - w / 2;
         int y = this.height / 2 - 92;
         cycle(x, y, w - 76, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
@@ -61,7 +63,7 @@ public final class ExportScreen extends Screen {
             settings.setProjection(modes[(settings.projection().ordinal() + 1) % modes.length]);
             rebuildWidgets();
         });
-        var resolution = cycle(x, y + 24, w - 68, this::resolutionLabel, () -> {
+        var resolution = cycle(x, y + 24, w - 140, this::resolutionLabel, () -> {
             var sizes = switch (settings.projection()) {
                 case ODS, PANORAMA, CUBE -> PANORAMAS;
                 case STEREO -> STEREO_RESOLUTIONS;
@@ -77,8 +79,10 @@ public final class ExportScreen extends Screen {
             this.settings.width = r[0];
             this.settings.height = r[1];
         });
-        cycle(x, y + 48, w / 2 - 2, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> {
-            this.settings.fps = next(FRAME_RATES, this.settings.fps);
+        addRenderableWidget(Button.builder(Component.translatable("reprise.export.custom"),
+            b -> minecraft.setScreen(new CustomVideoScreen(this, session.project()))).bounds(x + w - 136, y + 24, 68, 20).build());
+        cycle(x, y + 48, w / 2 - 2, () -> Component.translatable("reprise.export.fps", this.settings.frameRate().toString()), () -> {
+            this.settings.setFrameRate(new FrameRate(next(FRAME_RATES, (int) settings.frameRate().value()), 1));
             updateOutputSummary();
         });
         addRenderableWidget(Button.builder(Component.translatable("reprise.queue.open", this.session.project().renderQueue.size()),
@@ -171,7 +175,7 @@ public final class ExportScreen extends Screen {
     }
 
     static Component outputSummary(ReplayProject project, int recordedTicks) {
-        int fps = project.export.fps;
+        double fps = project.export.frameRate().value();
         int end = project.end(project.shotDuration(recordedTicks));
         long frames = project.frameSchedule(project.start(), end, fps).frameCount();
         return Component.translatable("reprise.export.output_duration", Timecode.outputDuration(frames, fps), frames);

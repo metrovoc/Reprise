@@ -20,7 +20,7 @@ final class FfmpegSink implements FrameSink {
 
     FfmpegSink(String ffmpeg, ExportSettings settings, int width, int height, Path output, Path log) throws IOException {
         List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-y",
-            "-f", "rawvideo", "-pix_fmt", "rgba", "-s", width + "x" + height, "-r", String.valueOf(settings.fps), "-i", "-",
+            "-f", "rawvideo", "-pix_fmt", "rgba", "-s", width + "x" + height, "-r", String.valueOf(settings.frameRate()), "-i", "-",
             "-vf", settings.format == ExportSettings.Format.MOV_PRORES && !settings.transparentSky ? "vflip,format=rgb24" : "vflip"));
         if (settings.supportsHardware() && settings.hardwareEncoder) {
             cmd.addAll(hardwareEncoder(ffmpeg, settings, width, height, log));
@@ -61,7 +61,7 @@ final class FfmpegSink implements FrameSink {
                 options.addAll(List.of("-allow_sw", "0"));
             }
             List<String> probe = new ArrayList<>(List.of(ffmpeg, "-nostdin", "-v", "error", "-f", "lavfi",
-                "-i", "color=s=" + width + "x" + height + ":r=" + settings.fps, "-frames:v", "1", "-vf", "format=rgba,vflip"));
+                "-i", "color=s=" + width + "x" + height + ":r=" + settings.frameRate(), "-frames:v", "1", "-vf", "format=rgba,vflip"));
             probe.addAll(options);
             probe.addAll(List.of("-f", "null", "-"));
             Process process = new ProcessBuilder(probe).redirectErrorStream(true).redirectOutput(log.toFile()).start();

@@ -251,7 +251,7 @@ public final class RepriseSteps {
                     var settings = s.project().export;
                     settings.width = Integer.parseInt(a[1]);
                     settings.height = Integer.parseInt(a[2]);
-                    settings.fps = Integer.parseInt(a[3]);
+                    settings.setFrameRate(com.metrovoc.reprise.editor.FrameRate.parse(a[3]));
                     settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
                     var flags = java.util.Arrays.asList(a).subList(Math.min(5, a.length), a.length);
                     settings.hardwareEncoder = flags.contains("gpu");

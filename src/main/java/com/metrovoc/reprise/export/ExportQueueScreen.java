@@ -197,7 +197,7 @@ final class ExportQueueScreen extends Screen {
             var settings = project.export;
             String name = editor.renderQueue.get(index).name();
             range = (name == null || name.isBlank() ? "" : name + " · ") + Timecode.precise(project.start()) + " – " + Timecode.precise(project.end(project.shotDuration(session.meta().durationTicks)));
-            format = settings.format.label + " · " + settings.outputWidth() + "×" + settings.outputHeight() + " · " + settings.fps + " fps";
+            format = settings.format.label + " · " + settings.outputWidth() + "×" + settings.outputHeight() + " · " + settings.frameRate() + " fps";
             output = ExportScreen.outputSummary(project, session.meta().durationTicks);
         }
 

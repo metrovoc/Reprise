@@ -15,7 +15,7 @@ public final class Timecode {
     }
 
     /** Encoded running time includes the display interval of the last frame. */
-    public static String outputDuration(long frames, int fps) {
+    public static String outputDuration(long frames, double fps) {
         long millis = Math.round(frames * (1000.0 / fps));
         long seconds = millis / 1000;
         if (seconds >= 3600) {

@@ -199,7 +199,9 @@ follows the replay and the shader frame counter advances once per exported frame
   and clouds in **Scene layers** and choose clear weather. Each output frame samples the same instant against black
   and white to recover transparency, including partially transparent materials. Turn off active Iris shader packs
   for transparent exports.
-- Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.
+- Choose a preset or open **Custom…** to enter even pixel dimensions and a frame rate. Use an integer,
+  a decimal, or an exact ratio such as `30000/1001`. For cube maps, enter the face size. For panoramas,
+  enter the height of one eye’s view. The dialog shows the resulting output dimensions before saving.
 - Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
 
 To batch shots from one replay, open **Queue** in the export screen and choose **Add current shot**.

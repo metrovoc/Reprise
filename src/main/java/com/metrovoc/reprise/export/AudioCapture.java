@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.export;
 
+import com.metrovoc.reprise.editor.FrameRate;
 import com.metrovoc.reprise.Reprise;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -25,7 +26,8 @@ public final class AudioCapture {
 
     private final Path file;
     private final OutputStream out;
-    private final int fps;
+    private final int numerator;
+    private final long samplesPerFrameNumerator;
     private final FloatBuffer samples;
     private final ByteBuffer bytes;
     private long device;
@@ -34,13 +36,16 @@ public final class AudioCapture {
     private long remainder;
     private long written;
 
-    AudioCapture(Path file, int fps, int frames, boolean wave) throws IOException {
+    AudioCapture(Path file, FrameRate rate, int frames, boolean wave) throws IOException {
         this.file = file;
-        this.fps = fps;
+        numerator = rate.numerator();
+        samplesPerFrameNumerator = (long) RATE * rate.denominator();
         this.wave = wave;
-        this.expectedSamples = (long) frames * RATE / fps;
+        // Divide first so a long shot at a fractional rate cannot overflow the intermediate product.
+        this.expectedSamples = frames * (samplesPerFrameNumerator / numerator)
+            + frames * (samplesPerFrameNumerator % numerator) / numerator;
         this.out = new BufferedOutputStream(Files.newOutputStream(file), 1 << 16);
-        int max = RATE / Math.max(1, fps) + 2;
+        int max = (int) (samplesPerFrameNumerator / numerator) + 2;
         this.samples = MemoryUtil.memAllocFloat(max * CHANNELS);
         this.bytes = ByteBuffer.allocate(max * CHANNELS * 4).order(ByteOrder.LITTLE_ENDIAN);
     }
@@ -72,9 +77,9 @@ public final class AudioCapture {
         for (int i = 0; i < 3; i++) {
             executor.submit(() -> {}).join();
         }
-        this.remainder += RATE;
-        int count = (int) (this.remainder / this.fps);
-        this.remainder %= this.fps;
+        this.remainder += samplesPerFrameNumerator;
+        int count = (int) (this.remainder / numerator);
+        this.remainder %= numerator;
         this.samples.clear();
         SOFTLoopback.alcRenderSamplesSOFT(this.device, this.samples, count);
         this.bytes.clear();
