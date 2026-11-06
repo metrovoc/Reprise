@@ -576,9 +576,13 @@ public final class ReplaySession {
     }
 
     private void processFoldedTick() {
-        if (mc.level != null && (!mc.level.lightUpdateQueue.isEmpty() || mc.level.getLightEngine().hasLightWork())) {
-            mc.level.update();
-        }
+        if (mc.level == null) return;
+        // A seek consumes recorded ticks without running ClientLevel.tick. Advance the
+        // same game clock used by clouds and recorded daylight between server time packets.
+        long gameTime = mc.level.getGameTime() + 1;
+        mc.level.setTimeFromServer(gameTime);
+        mc.level.clockManager().tick(gameTime);
+        if (!mc.level.lightUpdateQueue.isEmpty() || mc.level.getLightEngine().hasLightWork()) mc.level.update();
     }
 
     private byte[] readBytes() {
