@@ -1,0 +1,39 @@
+// The driver: a development-only source set that plays scripts in the client. Never packaged.
+//
+//     apply from: 'driver.gradle'     (in build.gradle, after the neoForge block)
+//     ./gradlew runDriver -Pscript=driver/smoke.txt [-Pmonitor="Display name"]
+//
+// Screenshots and clips land in run/driver/screenshots, the log in run/driver/logs/latest.log.
+sourceSets {
+    driver
+}
+
+configurations {
+    driverImplementation.extendsFrom implementation
+    driverRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    driverImplementation sourceSets.main.output
+}
+
+neoForge {
+    addModdingDependenciesTo sourceSets.driver
+
+    runs {
+        driver {
+            client()
+            sourceSet = sourceSets.driver
+            gameDirectory = file('run/driver')
+            var projectDir = layout.projectDirectory
+            systemProperties.put 'driver.script', providers.gradleProperty('script').map { projectDir.file(it).asFile.absolutePath }.orElse('')
+            systemProperties.put 'driver.monitor', providers.gradleProperty('monitor').orElse('')
+            programArguments.addAll '--width', '1600', '--height', '1000'
+        }
+    }
+
+    // the driver's classes join the mod, so that its event subscriber registers as part of it
+    mods.matching { it.name == mod_id }.configureEach {
+        sourceSet(sourceSets.driver)
+    }
+}

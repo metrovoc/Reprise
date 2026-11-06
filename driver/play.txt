@@ -1,0 +1,26 @@
+replay latest
+wait 100
+shot play_loaded
+replay state
+replay camera 0 -50 -6 0 30
+wait 5
+shot play_start
+replay play
+wait 60
+replay state
+shot play_mid
+replay seek 10
+wait 10
+replay state
+shot play_seek_back
+replay seek 120
+wait 10
+replay state
+shot play_seek_fwd
+replay editor
+wait 10
+shot editor
+replay close
+replay exit
+wait 40
+quit

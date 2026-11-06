@@ -1,0 +1,209 @@
+package com.metrovoc.reprise.record;
+
+import com.google.common.hash.HashCode;
+import com.google.common.hash.Hashing;
+import com.metrovoc.reprise.Reprise;
+import com.metrovoc.reprise.format.Actions;
+import com.metrovoc.reprise.format.ReplayMeta;
+import com.metrovoc.reprise.util.Varints;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+
+/**
+ * Writes a recording folder on its own thread. The game thread hands over already encoded packets, so this thread only
+ * does file IO and chunk de-duplication; a slow disk never stalls the game.
+ */
+public final class ReplayWriter {
+    private final Path dir;
+    private final ReplayMeta meta;
+    private final BlockingQueue<Consumer<ReplayWriter>> tasks = new ArrayBlockingQueue<>(4096);
+    private final Thread thread;
+    private volatile boolean running = true;
+    private volatile Throwable failure;
+
+    private DataOutputStream segment;
+    private ReplayMeta.Segment currentSegment;
+    private DataOutputStream chunkOut;
+    private int chunkOutFile = -1;
+    private final Map<HashCode, Integer> chunkIndex = new HashMap<>();
+
+    public ReplayWriter(Path dir, ReplayMeta meta) throws IOException {
+        this.dir = dir;
+        this.meta = meta;
+        Files.createDirectories(dir.resolve("segments"));
+        Files.createDirectories(dir.resolve("chunks"));
+        this.thread = new Thread(this::run, "Reprise Writer");
+        this.thread.setDaemon(true);
+        this.thread.start();
+    }
+
+    public Path dir() {
+        return this.dir;
+    }
+
+    /** Runs {@code task} on the writer thread, in submission order. Blocks if the writer is far behind. */
+    public void submit(Consumer<ReplayWriter> task) {
+        if (this.failure != null) {
+            throw new IllegalStateException("Replay writer failed", this.failure);
+        }
+        try {
+            this.tasks.put(task);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void run() {
+        while (this.running || !this.tasks.isEmpty()) {
+            try {
+                Consumer<ReplayWriter> task = this.tasks.poll(100, TimeUnit.MILLISECONDS);
+                if (task != null && this.failure == null) {
+                    task.accept(this);
+                }
+            } catch (InterruptedException e) {
+                break;
+            } catch (Throwable t) {
+                Reprise.LOGGER.error("Replay writer failed", t);
+                this.failure = t;
+            }
+        }
+    }
+
+    /** Finishes all queued work, closes the files and writes the final metadata. */
+    public void close() {
+        submit(w -> {
+            try {
+                w.closeSegment();
+                if (w.chunkOut != null) {
+                    w.chunkOut.close();
+                }
+                w.writeMeta();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        this.running = false;
+        try {
+            this.thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public Throwable failure() {
+        return this.failure;
+    }
+
+    // Everything below runs on the writer thread.
+
+    public void beginSegment(boolean reset) {
+        try {
+            closeSegment();
+            int index = this.meta.segments.size();
+            this.currentSegment = new ReplayMeta.Segment(Actions.segmentFile(index), this.meta.durationTicks, reset);
+            this.meta.segments.add(this.currentSegment);
+            this.segment = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(this.dir.resolve(this.currentSegment.file)), 1 << 16));
+            this.segment.writeInt(Actions.MAGIC);
+            this.segment.writeInt(Actions.VERSION);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void closeSegment() throws IOException {
+        if (this.segment != null) {
+            this.segment.close();
+            this.segment = null;
+            writeMeta();
+        }
+    }
+
+    public void gamePacket(byte[] bytes) {
+        action(Actions.GAME_PACKET, bytes);
+    }
+
+    public void configPacket(byte[] bytes) {
+        action(Actions.CONFIG_PACKET, bytes);
+    }
+
+    /** A chunk packet: stored once in the chunk cache however often it is recorded. */
+    public void chunkPacket(byte[] bytes) {
+        try {
+            HashCode hash = Hashing.sha256().hashBytes(bytes);
+            Integer index = this.chunkIndex.get(hash);
+            if (index == null) {
+                index = this.meta.chunkCount++;
+                this.chunkIndex.put(hash, index);
+                int file = index / Actions.CHUNKS_PER_FILE;
+                if (file != this.chunkOutFile) {
+                    if (this.chunkOut != null) {
+                        this.chunkOut.close();
+                    }
+                    this.chunkOut = new DataOutputStream(new BufferedOutputStream(
+                        Files.newOutputStream(this.dir.resolve(Actions.chunkFile(file)), StandardOpenOption.CREATE, StandardOpenOption.APPEND), 1 << 16));
+                    this.chunkOutFile = file;
+                }
+                Varints.write(this.chunkOut, bytes.length);
+                this.chunkOut.write(bytes);
+                this.chunkOut.flush();
+            }
+            this.segment.writeByte(Actions.CHUNK_REF);
+            Varints.write(this.segment, index);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void snapshotEnd() {
+        action(Actions.SNAPSHOT_END, null);
+    }
+
+    public void tick() {
+        action(Actions.TICK, null);
+        this.meta.durationTicks++;
+        this.currentSegment.ticks++;
+    }
+
+    public int segmentTicks() {
+        return this.currentSegment == null ? 0 : this.currentSegment.ticks;
+    }
+
+    public void addMarker(ReplayMeta.Marker marker) {
+        marker.tick = this.meta.durationTicks;
+        this.meta.markers.add(marker);
+    }
+
+    private void action(int id, byte[] payload) {
+        try {
+            this.segment.writeByte(id);
+            if (payload != null) {
+                Varints.write(this.segment, payload.length);
+                this.segment.write(payload);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void writeMeta() {
+        try {
+            Path tmp = this.dir.resolve("meta.json.tmp");
+            Files.writeString(tmp, this.meta.toJson(), StandardCharsets.UTF_8);
+            Files.move(tmp, this.dir.resolve("meta.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}

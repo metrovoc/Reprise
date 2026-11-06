@@ -1,0 +1,18 @@
+# A first look at a mod: a flat creative world, the mod's creative tab and its names. Replace MODID and example_tab.
+world
+cmd gamerule send_command_feedback false
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+gui 4
+wait 20
+shot world
+missing MODID
+creative MODID:example_tab
+wait 10
+inspect
+hover 100 40
+wait 10
+shot creative_tab
+key escape
+quit

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.metrovoc.reprise.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "record.ListenerAndPacketMixin",
+    "record.ClientLevelMixin",
+    "playback.MinecraftMixin",
+    "playback.LocalPlayerMixin",
+    "playback.ClientPacketListenerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

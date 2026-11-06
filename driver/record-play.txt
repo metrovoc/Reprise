@@ -1,0 +1,25 @@
+# Record a short session in a flat world, then watch it back.
+world
+cmd gamerule send_command_feedback false
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+gui 2
+fly on
+cmd tp @s 0 -55 0 0 20
+wait 20
+cmd summon minecraft:pig 3 -60 6
+cmd summon minecraft:cow -3 -60 6
+cmd setblock 0 -61 8 minecraft:gold_block
+record start
+wait 40
+cmd tp @s 0 -55 2 0 20
+wait 20
+cmd setblock 2 -60 8 minecraft:diamond_block
+wait 20
+cmd tp @s 2 -55 4 30 25
+wait 40
+shot rec_live
+record stop
+wait 10
+quit

@@ -1,0 +1,35 @@
+package com.metrovoc.reprise.format;
+
+/**
+ * Segment file layout: {@link #MAGIC}, {@link #VERSION}, then a stream of actions. Each action is one id byte followed
+ * by its payload. A segment opens with a snapshot (everything up to {@link #SNAPSHOT_END}) that rebuilds the client's
+ * state from nothing; playback runs it only when it enters the segment by seeking or after a reset.
+ */
+public final class Actions {
+    public static final int MAGIC = 0x52505253; // "RPRS"
+    public static final int VERSION = 1;
+
+    /** Ends one recorded client tick. No payload. */
+    public static final int TICK = 0;
+    /** A clientbound play packet: varint length, then the packet as the game codec writes it (id + body). */
+    public static final int GAME_PACKET = 1;
+    /** A clientbound configuration packet: varint length, then id + body. */
+    public static final int CONFIG_PACKET = 2;
+    /** A chunk packet stored once in the chunk cache: varint cache index. */
+    public static final int CHUNK_REF = 3;
+    /** Marks the end of the segment's snapshot. No payload. */
+    public static final int SNAPSHOT_END = 4;
+
+    /** Chunk packets per chunk cache file. */
+    public static final int CHUNKS_PER_FILE = 2048;
+
+    public static String segmentFile(int index) {
+        return "segments/" + index + ".bin";
+    }
+
+    public static String chunkFile(int fileIndex) {
+        return "chunks/" + fileIndex + ".bin";
+    }
+
+    private Actions() {}
+}
