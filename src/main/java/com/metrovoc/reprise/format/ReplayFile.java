@@ -127,7 +127,7 @@ public final class ReplayFile implements Closeable {
             throw new IOException("Bad segment header in segment " + index);
         }
         int version = buf.getInt();
-        if (version > Actions.PACKED_POV_VERSION) {
+        if (version > Actions.VIEW_MOTION_VERSION) {
             throw new IOException("Segment " + index + " needs a newer version of Reprise");
         }
         return buf;
@@ -147,7 +147,7 @@ public final class ReplayFile implements Closeable {
             switch (buf.get()) {
                 case Actions.SNAPSHOT_END -> { return buf; }
                 case Actions.SNAPSHOT_TICK -> { }
-                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV -> {
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV, Actions.VIEW_MOTION -> {
                     int length = Varints.read(buf);
                     if (length < 0 || length > buf.remaining()) {
                         throw new IOException("Invalid snapshot packet length in segment " + index);

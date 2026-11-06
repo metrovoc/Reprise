@@ -119,7 +119,7 @@ public final class ReplayJoiner {
                         if (old < 0 || old >= ids.length) throw new IOException("Missing terrain packet " + old);
                         Varints.write(out, ids[old]);
                     }
-                    case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV -> {
+                    case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV, Actions.VIEW_MOTION -> {
                         int size = Varints.read(buf);
                         if (size < 0 || size > buf.remaining()) throw new IOException("Truncated packet in " + original.file);
                         Varints.write(out, size);

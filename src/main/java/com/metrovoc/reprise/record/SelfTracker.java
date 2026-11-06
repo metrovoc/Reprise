@@ -69,6 +69,8 @@ final class SelfTracker {
         this.recorder.writeGame(new ClientboundAddEntityPacket(
             player.getId(), player.getUUID(), player.getX(), player.getY(), player.getZ(),
             player.getXRot(), player.getYRot(), EntityType.PLAYER, 0, player.getDeltaMovement(), player.getYHeadRot()));
+        // Spawn angles are packed into bytes; keep the exact initial view even when the player stands still.
+        this.recorder.writeGame(ClientboundEntityPositionSyncPacket.of(player));
         List<SynchedEntityData.DataValue<?>> data = player.getEntityData().getNonDefaultValues();
         if (data != null) {
             data.forEach(value -> this.lastData.put(value.id(), value.value()));

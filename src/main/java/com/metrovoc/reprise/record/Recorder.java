@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.record;
 
+import com.metrovoc.reprise.format.ViewMotion;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.format.EmbeddedPacks;
@@ -58,6 +59,7 @@ public final class Recorder {
     private int failedEncodes;
     private int segmentTicks;
     private int recordedTicks;
+    private ViewMotion previousView, writtenView;
 
     private Recorder(ClientPacketListener connection) throws IOException {
         int divisions = com.metrovoc.reprise.RepriseConfig.POV_DIVISIONS.get();
@@ -367,12 +369,19 @@ public final class Recorder {
             return;
         }
         byte[] samples = pov == null ? null : pov.finish(this.minecraft.player);
+        ViewMotion view = previousView;
+        previousView = ((ViewMotion.Source)minecraft.gameRenderer.getMainCamera()).reprise$captureView(minecraft.player.avatarState());
         if (this.snapshotPending) {
+            writtenView = previousView;
             beginSegment(this.resetPending || this.recordedTicks == 0, null);
             return;
         }
         recordPacks(false);
         this.self.tick();
+        if (view != null && !view.equals(writtenView)) {
+            writtenView = view;
+            writer.submit(w -> w.viewMotion(view.encode()));
+        }
         this.writer.submit(w -> {
             if (samples != null) w.povSamples(samples);
             w.tick();
@@ -388,10 +397,12 @@ public final class Recorder {
         this.snapshotPending = false;
         this.resetPending = false;
         this.segmentTicks = 0;
-        this.writer.submit(w -> w.beginSegment(reset, pov == null ? Actions.VERSION : Actions.PACKED_POV_VERSION));
+        this.writer.submit(w -> w.beginSegment(reset, Actions.VIEW_MOTION_VERSION));
+        ViewMotion view = writtenView;
         SnapshotBuilder.write(this, this.minecraft, this.spawnData, this.self::spawn);
         this.writer.submit(w -> {
             if (samples != null) w.povSamples(samples);
+            if (view != null) w.viewMotion(view.encode());
             w.snapshotEnd();
         });
     }

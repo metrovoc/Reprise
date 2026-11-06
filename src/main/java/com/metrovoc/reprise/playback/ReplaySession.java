@@ -1,5 +1,6 @@
 package com.metrovoc.reprise.playback;
 
+import com.metrovoc.reprise.format.ViewMotion;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
@@ -131,13 +132,16 @@ public final class ReplaySession {
     private final List<ClientboundResourcePackPushPacket> snapshotPacks = new ArrayList<>();
     private Map<Integer, PovSamples> pov = new java.util.HashMap<>(), pendingPov = new java.util.HashMap<>();
 
+    private final RecorderMotion recorderMotion = new RecorderMotion();
+    private ViewMotion recordedView;
+
     private int failedPackets;
     private UUID spectating;
     private final ReplayProject project;
+    public final com.metrovoc.reprise.export.Soundtrack soundtrack = new com.metrovoc.reprise.export.Soundtrack();
     private ReplayProject queuedProject;
 
     private ReplaySession(ReplayFile file, Screen exitScreen) {
-    public final com.metrovoc.reprise.export.Soundtrack soundtrack = new com.metrovoc.reprise.export.Soundtrack();
         this.file = file;
         this.meta = file.meta();
         this.exitScreen = exitScreen;
@@ -233,10 +237,10 @@ public final class ReplaySession {
         }
         com.metrovoc.reprise.export.VideoExporter.sessionClosed(this);
         active = null;
+        soundtrack.close();
         terrainClock.discard();
         skyLightCache.clear();
         CameraPath.setPreview(false);
-        soundtrack.close();
         this.project.save();
         clearEmbeddedPacks();
         try {
@@ -307,10 +311,10 @@ public final class ReplaySession {
     }
 
     public void setPlaying(boolean playing) {
+        if (!playing) soundtrack.stopPreview();
         this.playing = playing && tick() < duration();
         if (this.playing) pausedCursor = Double.NaN;
     }
-        if (!playing) soundtrack.stopPreview();
 
     public float speed() {
         return this.speed;
@@ -427,10 +431,10 @@ public final class ReplaySession {
 
     /** Moves to a whole tick on the shot timeline, keeping the camera where it is. */
     public void seek(int target) {
+        soundtrack.stopPreview();
         pausedCursor = Double.NaN;
         target = Math.max(0, Math.min(duration(), target));
         currentFreezes = project().freezes;
-        soundtrack.stopPreview();
         int shotTarget = target;
         target = (int) Math.ceil(project().worldTick(target));
         shotOffset = shotTarget - target;
@@ -537,6 +541,7 @@ public final class ReplaySession {
                         deliverGame(ByteBuffer.wrap(bytes));
                     }
                 }
+                case Actions.VIEW_MOTION -> recordedView = ViewMotion.decode(readBytes());
                 case Actions.POV_SAMPLES, Actions.PACKED_POV -> readPov(action);
                 case Actions.CHUNK_REF -> {
                     int index = Varints.read(reader);
@@ -615,7 +620,7 @@ public final class ReplaySession {
                 }
                 case Actions.SNAPSHOT_END -> snapshot = false;
                 case Actions.SNAPSHOT_TICK -> { }
-                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV -> {
+                case Actions.GAME_PACKET, Actions.CONFIG_PACKET, Actions.POV_SAMPLES, Actions.PACKED_POV, Actions.VIEW_MOTION -> {
                     int length = Varints.read(buf);
                     byte[] bytes = new byte[length];
                     buf.get(bytes);
@@ -642,6 +647,7 @@ public final class ReplaySession {
     }
 
     private void advancePov() {
+        recorderMotion.advance();
         var old = pov;
         pov = pendingPov;
         pendingPov = old;
@@ -649,9 +655,26 @@ public final class ReplaySession {
     }
 
     public PovSamples.Pose povAt(int entityId, float fraction) {
-        if (pov.isEmpty()) return null;
         var samples = pov.get(entityId);
-        if (samples == null) return null;
+        if (samples == null && entityId != recorderId) return null;
+        fraction = povFraction(fraction);
+        if (samples != null) return samples.at(fraction);
+        return entityId == recorderId ? recorderMotion.at(fraction) : null;
+    }
+
+    public void applyWalk(net.minecraft.client.renderer.state.level.CameraRenderState state, Entity entity, float fraction) {
+        if (entity.getId() != recorderId || !meta.snapshotConnectionType || entity.isPassenger()) return;
+        float f = povFraction(fraction);
+        var view = state.entityRenderState;
+        view.bob = recordedView == null ? recorderMotion.bob(f) : recordedView.bob(f);
+        view.backwardsInterpolatedWalkDistance = recordedView == null ? recorderMotion.walk(f) : recordedView.walk(f);
+    }
+
+    public ViewMotion recordedView(Entity entity) {
+        return entity != null && entity.getId() == recorderId ? recordedView : null;
+    }
+
+    public float povFraction(float fraction) {
         if (!project().freezes.isEmpty()) {
             var export = com.metrovoc.reprise.export.VideoExporter.running();
             double shot = export == null ? visualTick(fraction) : export.shotTick();
@@ -659,7 +682,7 @@ public final class ReplaySession {
         } else if (!playing) {
             fraction = 1;
         }
-        return samples.at(fraction);
+        return Math.clamp(fraction, 0, 1);
     }
 
     // Snapshots.
@@ -674,6 +697,8 @@ public final class ReplaySession {
         }
         this.segment = index;
         this.reader = buf;
+        recorderMotion.spawn(null);
+        recordedView = null;
         pov.clear();
         pendingPov.clear();
         this.tick = this.meta.segments.get(index).startTick;
@@ -716,6 +741,7 @@ public final class ReplaySession {
                         beforeFirstBoundary = false;
                     }
                     case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()), -1, beforeFirstBoundary);
+                    case Actions.VIEW_MOTION -> recordedView = ViewMotion.decode(readBytes());
                     case Actions.POV_SAMPLES, Actions.PACKED_POV -> readPov(action);
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
                     case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
@@ -781,7 +807,10 @@ public final class ReplaySession {
         if (com.metrovoc.reprise.record.Recorder.liveOnly(packet)) return;
         if (packet instanceof ClientboundCustomPayloadPacket custom
             && !(custom.payload() instanceof ModdedNetworkQueryPayload)
-            && !(custom.payload() instanceof ModdedNetworkPayload)) return;
+            && !(custom.payload() instanceof ModdedNetworkPayload)
+            && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistrySyncStartPayload)
+            && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistryPayload)
+            && !(custom.payload() instanceof net.neoforged.neoforge.network.payload.FrozenRegistrySyncCompletedPayload)) return;
         deliver(packet, this.configListener);
     }
 
@@ -862,6 +891,14 @@ public final class ReplaySession {
             listener.handleConfigurationStart(start);
             configListener = (ClientConfigurationPacketListenerImpl) connection.getPacketListener();
             return;
+        }
+        if (meta.snapshotConnectionType) {
+            if (packet instanceof net.minecraft.network.protocol.game.ClientboundAddEntityPacket spawn && spawn.getId() == recorderId) {
+                recorderMotion.spawn(new PovSamples.Pose(spawn.getX(), spawn.getY(), spawn.getZ(), spawn.getYRot(), spawn.getXRot()));
+                recordedView = null;
+            } else if (packet instanceof ClientboundEntityPositionSyncPacket sync && sync.id() == recorderId) {
+                recorderMotion.move(sync);
+            }
         }
         if (handleEmbeddedPack(packet)) return;
         packet = this.filter.apply(packet);

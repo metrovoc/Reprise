@@ -152,6 +152,8 @@ public final class ReplayWriter {
         }
     }
 
+    void viewMotion(byte[] bytes) { action(Actions.VIEW_MOTION, bytes); }
+
     void povSamples(byte[] bytes) { action(Actions.PACKED_POV, bytes); }
 
     public void gamePacket(byte[] bytes) {

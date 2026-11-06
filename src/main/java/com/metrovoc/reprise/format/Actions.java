@@ -22,6 +22,10 @@ public final class Actions {
     public static final int PACKED_POV_VERSION = 5;
     public static final int PACKED_POV = 7;
 
+    /** Version 6 records local first-person walking, eye height and field-of-view animation. */
+    public static final int VIEW_MOTION_VERSION = 6;
+    public static final int VIEW_MOTION = 8;
+
     /** Ends one recorded client tick. No payload. */
     public static final int TICK = 0;
     /** A clientbound play packet: varint length, then the packet as the game codec writes it (id + body). */

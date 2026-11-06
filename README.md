@@ -24,11 +24,10 @@ counts, selection, food and experience, enable **Record my hotbar and HUD** in t
 before starting a recording. When you spectate the recording player, their items and applicable survival
 HUD appear below the replay timeline.
 
-For smoother first-person turns, set **First-person samples per tick** before recording. The default of 1
-uses ordinary 20 Hz recording. A value of 8 samples the rendered movement at 160 Hz for playback and export.
-The detail available depends on the frame rate during recording. Higher settings use segment format 5 and preserve each sample’s full precision.
-In a two-minute test with one minute of movement and turns followed by one minute at rest, 160 Hz POV
-samples added 39.5 kB to the compressed segments. The same samples in format 4 added 78.2 kB.
+First-person playback follows the recorder's movement directly. New recordings preserve walking bob, crouching eye height,
+and sprint field of view. They sample mouse turns eight times per tick by default (160 Hz); the detail
+available depends on your frame rate while recording. Change **First-person samples per tick** to adjust this, or select 1 for ordinary
+20 Hz capture. Existing recordings use the movement samples they already contain.
 
 Native recordings save player chat as it reaches the chat window, including server masking and client chat
 filters. During playback, imported player messages use their recorded display text and filter masks without
@@ -129,13 +128,13 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   or drag any other key to anchor the first. Crossing the anchor reverses key order.
 - Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
   or paste. Paste places the earliest copied key at the playhead and preserves the spacing of the others. Keys
+  at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
 - **Audio cues** places music, narration or effects at a shot tick. Choose a local file or drop it into the cue
   window. Set its source offset, length and volume. Overlapping cues mix in stereo. The waveform follows
   video time through speed changes and world freezes. Double-click a waveform to edit its cue, or use **Previous cue** and **Next cue** to reach overlapping clips.
   Reprise links the original files, so keep them available when reopening a project or rendering a queued shot.
   WAV works with the built-in audio reader. Other formats such as FLAC use ffmpeg. Adding the first cue enables
   **Sound** for export.
-  at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
 - **Camera shake** adds handheld movement from the current shot tick. Set the horizontal and vertical
   rates in hertz and their angles in degrees. Enter a fractional tick to place or move the key precisely. **Linear** gradually changes both settings toward the next
   shake key. Use easing for a gentler transition or **Hold** for an abrupt change at the next key. Set both angles to zero to end the movement, or use

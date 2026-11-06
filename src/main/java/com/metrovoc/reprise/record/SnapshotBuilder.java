@@ -128,6 +128,9 @@ final class SnapshotBuilder {
             var setup = ChannelAttributes.getPayloadSetup(listener.getConnection());
             recorder.writeConfig(new ClientboundCustomPayloadPacket(new ModdedNetworkQueryPayload(Map.of())));
             recorder.writeConfig(new ClientboundCustomPayloadPacket(new ModdedNetworkPayload(setup)));
+            // Item stacks, entity data and chunks use this connection's numeric IDs, including in snapshots.
+            new net.neoforged.neoforge.network.configuration.SyncRegistries().run(
+                payload -> recorder.writeConfig(new ClientboundCustomPayloadPacket(payload)));
         }
         recorder.writeConfig(new ClientboundUpdateEnabledFeaturesPacket(FeatureFlags.REGISTRY.toNames(mc.level.enabledFeatures())));
         RegistryOps<Tag> ops = player.registryAccess().createSerializationContext(NbtOps.INSTANCE);
