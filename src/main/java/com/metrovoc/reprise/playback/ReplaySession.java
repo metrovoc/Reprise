@@ -4,6 +4,7 @@ import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.metrovoc.reprise.Reprise;
+import com.metrovoc.reprise.editor.EnvironmentSettings.Layer;
 import com.metrovoc.reprise.format.Actions;
 import com.metrovoc.reprise.format.ReplayFile;
 import com.metrovoc.reprise.format.ReplayMeta;
@@ -196,6 +197,10 @@ public final class ReplaySession {
         return this.meta.durationTicks;
     }
 
+    public static boolean hides(Layer layer) {
+        return active != null && active.project.environment.hidden.contains(layer);
+    }
+
     public boolean isPlaying() {
         return this.playing;
     }
@@ -308,6 +313,7 @@ public final class ReplaySession {
             this.seeking = false;
         }
         settleEntities();
+        refreshEnvironment();
         if (this.mc.player != null && pos != null) {
             this.mc.player.snapTo(pos.x, pos.y, pos.z, yRot, xRot);
             this.mc.player.setOldPosAndRot();
@@ -631,6 +637,16 @@ public final class ReplaySession {
             if (this.failedPackets++ < 10) {
                 Reprise.LOGGER.warn("Recorded packet {} failed", packet.type(), e);
             }
+        }
+    }
+
+    public void refreshEnvironment() {
+        if (this.mc.level != null) {
+            this.mc.level.environmentAttributes().invalidateTickCache();
+            this.mc.level.updateSkyBrightness();
+            var camera = this.mc.gameRenderer.getMainCamera();
+            camera.attributeProbe().reset();
+            camera.attributeProbe().tick(this.mc.level, camera.position());
         }
     }
 

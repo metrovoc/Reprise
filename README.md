@@ -68,6 +68,12 @@ The editor (`Tab`) puts a timeline under the live world. The movement keys still
 - **Entities** lists players and mobs at the current replay time. Search by name or UUID, then select a row to
   spectate, hide, or outline that entity. Enter a six-digit hex color to change its outline, or set a custom name tag. These edits
   are saved with the project and apply to video exports. Hiding a spectated player also hides their first-person hands.
+- **Environment** changes the replay's weather and daylight. Choose recorded weather, clear, overcast, rain, snow,
+  or thunderstorm. Set a fixed time from 0 to 23999, or use **Set time key** at several replay ticks for a timelapse.
+  The clock moves forward between keys and wraps through midnight. **Recorded time** restores the original lighting.
+- Under **Environment → Scene layers**, show or hide terrain, players, other entities, particles and clouds.
+  Set a solid sky color for chroma key, adjust fog start and end in blocks, tint the fog, or enable night vision.
+  Shader packs that draw their own sky can override the solid color.
 - **Names** shows or hides name tags.
 - `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
 
@@ -81,6 +87,10 @@ to finish building. With Sodium, Reprise requests synchronous terrain rendering 
 follows the replay and the shader frame counter advances once per exported frame.
 
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
+- **Transparent sky** exports straight alpha in PNG sequences and ProRes 4444. For a character cutout, hide terrain
+  and clouds in **Scene layers** and choose clear weather. Each output frame samples the same instant against black
+  and white to recover transparency, including partially transparent materials. Turn off active Iris shader packs
+  for transparent exports.
 - Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.
 - Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
 

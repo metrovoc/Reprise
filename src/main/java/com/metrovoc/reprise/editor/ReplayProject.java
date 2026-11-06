@@ -18,6 +18,7 @@ import java.util.UUID;
 public final class ReplayProject {
     public record EntityOverride(String name, boolean hidden, Integer outlineColor, String label) {}
 
+    public EnvironmentSettings environment = new EnvironmentSettings();
     public boolean hideNames;
     public Map<UUID, EntityOverride> entityOverrides = new HashMap<>();
 
@@ -97,6 +98,7 @@ public final class ReplayProject {
         }
         to.add(ReplayMeta.GSON.toJson(this));
         ReplayProject state = ReplayMeta.GSON.fromJson(from.remove(from.size() - 1), ReplayProject.class);
+        this.environment = state.environment;
         this.hideNames = state.hideNames;
         this.entityOverrides = state.entityOverrides;
         this.keyframes = state.keyframes;

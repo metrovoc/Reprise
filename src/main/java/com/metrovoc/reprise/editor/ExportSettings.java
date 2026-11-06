@@ -25,5 +25,11 @@ public final class ExportSettings {
     public Format format = Format.MP4_H264;
     public boolean hideHud = true;
     public boolean audio = false;
+    public boolean transparentSky;
+
+    public boolean supportsAlpha() {
+        return format == Format.PNG_SEQUENCE || format == Format.MOV_PRORES;
+    }
+
     public String ffmpeg = "";
 }

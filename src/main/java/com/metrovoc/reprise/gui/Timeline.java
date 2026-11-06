@@ -80,6 +80,11 @@ public final class Timeline {
             int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
             diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
         }
+        for (var key : project.environment.keys) {
+            int tx = xOf(key.tick(), duration);
+            int color = project.environment.clock == com.metrovoc.reprise.editor.EnvironmentSettings.Clock.KEYFRAMED ? 0xFFFFAA66 : 0xFF90745F;
+            g.fill(tx - 2, trackTop, tx + 3, trackTop + 2, color);
+        }
         for (com.metrovoc.reprise.editor.SpeedKey key : project.speedKeys) {
             int sx = xOf(key.tick, duration);
             g.fill(sx - 2, trackBottom - 4, sx + 3, trackBottom - 3, SPEED);

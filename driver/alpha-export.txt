@@ -1,0 +1,39 @@
+# Run after record-play.txt with a fresh project. Compare the opaque green render with the RGBA composite.
+replay latest
+wait 60
+replay seek 30
+replay camera -3 -60 0 0 0
+replay keyframe
+replay editor
+press Environment
+press Clear
+press Scene layers
+press Terrain:
+press Particles:
+press Clouds:
+press Players:
+press Solid sky
+press Done
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE
+wait 175
+replay editor
+press Export
+press Transparent sky:
+press Export
+wait 175
+pixels composite 30
+replay export 640 360 20 MOV_PRORES alpha audio
+wait 175
+replay editor
+press Environment
+press Scene layers
+press Other entities:
+press Done
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE alpha
+wait 175
+pixels solid 30 00000000
+quit

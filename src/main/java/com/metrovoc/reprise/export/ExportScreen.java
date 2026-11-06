@@ -22,6 +22,9 @@ public final class ExportScreen extends Screen {
     private final ExportSettings settings;
     private String error;
     private String ffmpeg;
+    private Button alphaButton;
+    private int frameCount;
+    private boolean shaders;
 
     public ExportScreen(Screen parent, ReplaySession session) {
         super(Component.translatable("reprise.export.title"));
@@ -32,13 +35,16 @@ public final class ExportScreen extends Screen {
 
     @Override
     protected void init() {
+        updateFrameCount();
+        this.shaders = ShaderPacks.active();
         this.ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
         int w = 200;
         int x = this.width / 2 - w / 2;
-        int y = this.height / 2 - 80;
+        int y = this.height / 2 - 92;
         cycle(x, y, w, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
             ExportSettings.Format[] all = ExportSettings.Format.values();
             this.settings.format = all[(this.settings.format.ordinal() + 1) % all.length];
+            updateAlpha();
         });
         cycle(x, y + 24, w, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
             int i = 0;
@@ -51,13 +57,36 @@ public final class ExportScreen extends Screen {
             this.settings.width = r[0];
             this.settings.height = r[1];
         });
-        cycle(x, y + 48, w, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> this.settings.fps = next(FRAME_RATES, this.settings.fps));
+        cycle(x, y + 48, w, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> {
+            this.settings.fps = next(FRAME_RATES, this.settings.fps);
+            updateFrameCount();
+        });
         cycle(x, y + 96, w, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
             () -> this.settings.audio = !this.settings.audio);
         cycle(x, y + 72, w, () -> Component.translatable("reprise.export.quality", this.settings.quality), () -> this.settings.quality = next(QUALITIES, this.settings.quality));
 
-        addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 128, w / 2 - 2, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 128, w / 2 - 2, 20).build());
+        this.alphaButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            this.settings.transparentSky = !this.settings.transparentSky;
+            this.session.project().save();
+            updateAlpha();
+        }).bounds(x, y + 120, w, 20).build());
+        updateAlpha();
+
+        addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 147, w / 2 - 2, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 147, w / 2 - 2, 20).build());
+    }
+
+    private void updateFrameCount() {
+        var project = this.session.project();
+        this.frameCount = project.frameTicks(project.start(), project.end(this.session.duration()), this.settings.fps).length;
+    }
+
+    private void updateAlpha() {
+        this.alphaButton.active = this.settings.supportsAlpha() && (!this.shaders || this.settings.transparentSky);
+        this.alphaButton.setTooltip(this.shaders && this.settings.supportsAlpha()
+            ? net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.alpha_shaders")) : null);
+        this.alphaButton.setMessage(Component.translatable("reprise.export.transparent_sky",
+            Component.translatable(this.alphaButton.active && this.settings.transparentSky ? "options.on" : "options.off")));
     }
 
     private void cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
@@ -91,11 +120,10 @@ public final class ExportScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         super.extractRenderState(g, mouseX, mouseY, a);
-        g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 100, 0xFFFFFFFF);
+        g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 107, 0xFFFFFFFF);
         ReplayProject project = this.session.project();
         int start = project.start(), end = project.end(this.session.duration());
-        int frames = project.frameTicks(start, end, this.settings.fps).length;
-        String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end), frames).getString();
+        String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end), this.frameCount).getString();
         g.centeredText(this.font, range, this.width / 2, this.height / 2 + 84, 0xFFB0B0B8);
         String camera = project.keyframes.isEmpty() ? Component.translatable("reprise.export.no_keyframes").getString()
             : Component.translatable("reprise.export.keyframes", project.keyframes.size()).getString();

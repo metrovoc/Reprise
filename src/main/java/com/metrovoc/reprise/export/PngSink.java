@@ -9,10 +9,12 @@ import java.nio.file.Path;
 final class PngSink implements FrameSink {
     private final Path dir;
     private final int width, height;
+    private final boolean alpha;
     private int index;
 
-    PngSink(Path dir, int width, int height) throws IOException {
+    PngSink(Path dir, int width, int height, boolean alpha) throws IOException {
         this.dir = Files.createDirectories(dir);
+        this.alpha = alpha;
         this.width = width;
         this.height = height;
     }
@@ -24,7 +26,7 @@ final class PngSink implements FrameSink {
                 int row = (this.height - 1 - y) * this.width * 4;
                 for (int x = 0; x < this.width; x++) {
                     int i = row + x * 4;
-                    int abgr = 0xFF000000 | (rgba[i + 2] & 0xFF) << 16 | (rgba[i + 1] & 0xFF) << 8 | (rgba[i] & 0xFF);
+                    int abgr = (this.alpha ? rgba[i + 3] << 24 : 0xFF000000) | (rgba[i + 2] & 0xFF) << 16 | (rgba[i + 1] & 0xFF) << 8 | (rgba[i] & 0xFF);
                     image.setPixelABGR(x, y, abgr);
                 }
             }

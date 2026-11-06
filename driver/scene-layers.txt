@@ -1,0 +1,72 @@
+# Run after record-play.txt with a fresh project.
+replay latest
+wait 50
+replay seek 30
+replay camera -3 -60 0 0 0
+replay keyframe
+replay editor
+press Environment
+press Clear
+press Scene layers
+press Terrain:
+press Particles:
+press Clouds:
+press Players:
+field Sky_color_(hex) 00FF00
+press Solid sky
+shot scene_layers
+press Done
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE
+wait 180
+replay editor
+press Environment
+press Scene layers
+press Other entities:
+press Done
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE
+wait 180
+pixels solid 30 FF00FF00
+replay editor
+press Environment
+field Time_of_day_(0–23999) 18000
+press Set fixed time
+press Scene layers
+press Terrain:
+press Other entities:
+press Natural sky
+press Done
+press Done
+replay close
+wait 6
+replay vision 0
+shot night_unlit
+replay editor
+press Environment
+press Scene layers
+press Night vision:
+press Done
+press Done
+replay close
+wait 6
+replay vision 1
+shot night_lit
+replay editor
+press Environment
+press Scene layers
+field Fog_start 1
+field Fog_end 12
+field Fog_color_(hex) DD4400
+press Apply fog
+press Done
+press Done
+replay close
+wait 6
+replay fog 1 12 DD4400
+shot fog_tinted
+replay export 640 360 20 PNG_SEQUENCE
+wait 180
+quit

@@ -10,11 +10,13 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -58,6 +60,8 @@ public final class VideoExporter {
     private boolean captureThisFrame;
     private boolean progressFrame;
     private int pendingReadbacks;
+    private final boolean transparent;
+    private boolean whitePass;
     private boolean finished;
     private final long startedAt = System.currentTimeMillis();
 
@@ -71,6 +75,10 @@ public final class VideoExporter {
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
         this.settings = settings;
+        this.transparent = settings.transparentSky && settings.supportsAlpha();
+        if (this.transparent && ShaderPacks.active()) {
+            throw new IllegalStateException(Component.translatable("reprise.export.alpha_shaders").getString());
+        }
         this.returnTo = returnTo;
         this.start = session.project().start();
         this.end = session.project().end(session.duration());
@@ -87,7 +95,7 @@ public final class VideoExporter {
         Path dir = ReprisePaths.exports();
         if (settings.format == ExportSettings.Format.PNG_SEQUENCE) {
             this.output = dir.resolve(base);
-            this.sink = new PngSink(this.output, this.width, this.height);
+            this.sink = new PngSink(this.output, this.width, this.height, this.transparent);
         } else {
             String ffmpeg = FfmpegSink.find(settings.ffmpeg);
             if (ffmpeg == null) {
@@ -121,6 +129,11 @@ public final class VideoExporter {
             }
         }
         options.chunkSectionFadeInTime().set(0.0);
+    }
+
+    /** RGB background for a transparency pass, or -1 to render the project background. */
+    public static int matteColor() {
+        return running == null || !running.transparent ? -1 : running.whitePass ? 0xFFFFFF : 0;
     }
 
     public static boolean isRunning() {
@@ -209,7 +222,9 @@ public final class VideoExporter {
             return 0;
         }
         if (this.frame >= this.totalFrames) {
-            stop(true, null);
+            if (this.pendingReadbacks == 0) {
+                stop(true, null);
+            }
             return 0;
         }
         if (!this.session.isPlaying()) {
@@ -279,6 +294,12 @@ public final class VideoExporter {
         }
         this.waited = 0;
         readBack();
+        if (this.transparent) {
+            this.whitePass = !this.whitePass;
+            if (this.whitePass) {
+                return; // Render the same replay tick and partial tick on white.
+            }
+        }
         if (this.audio != null) {
             try {
                 this.audio.frame();
@@ -308,7 +329,9 @@ public final class VideoExporter {
             try (GpuBuffer.MappedView view = encoder.mapBuffer(buffer, true, false)) {
                 byte[] bytes = new byte[w * h * 4];
                 view.data().get(bytes);
-                this.frames.put(bytes);
+                if (!this.finished) {
+                    enqueue(bytes);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
@@ -318,15 +341,37 @@ public final class VideoExporter {
         }, 0);
     }
 
+    private void enqueue(byte[] frame) throws InterruptedException {
+        while (!this.writerDone && this.writeError == null) {
+            if (this.frames.offer(frame, 100, TimeUnit.MILLISECONDS)) {
+                return;
+            }
+        }
+    }
+
     private void write() {
         try {
+            int written = 0;
             while (true) {
                 byte[] bytes = this.frames.take();
                 if (bytes.length == 0) {
+                    if (written != this.totalFrames) {
+                        throw new IOException("Incomplete video: " + written + " frames written");
+                    }
                     break;
                 }
+                if (this.transparent) {
+                    byte[] white = this.frames.take();
+                    if (white.length != bytes.length) {
+                        throw new IOException("Missing white transparency pass");
+                    }
+                    AlphaMatte.combine(bytes, white);
+                }
                 this.sink.frame(bytes);
+                written++;
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Throwable t) {
             this.writeError = t;
             Reprise.LOGGER.error("Writing the video failed", t);
@@ -345,20 +390,15 @@ public final class VideoExporter {
         }
         this.finished = true;
         FlawlessFrames.setEnabled(false);
-        // Pending GPU readbacks complete on the render thread; give them a few frames.
-        for (int i = 0; i < 50 && this.pendingReadbacks > 0; i++) {
-            RenderSystem.executePendingTasks();
-            try {
-                Thread.sleep(5);
-            } catch (InterruptedException ignored) {
-            }
-        }
         boolean ok = success;
         try {
             if (success) {
-                this.frames.put(new byte[0]);
+                enqueue(new byte[0]);
                 this.writer.join();
                 ok = this.writeError == null && this.sink.finish();
+                if (!ok) {
+                    this.sink.abort();
+                }
                 if (ok && this.audio != null) {
                     this.audio.stop();
                     ok = addAudio();
@@ -366,6 +406,7 @@ public final class VideoExporter {
             } else {
                 this.writer.interrupt();
                 this.sink.abort();
+                this.writer.join();
             }
         } catch (Exception e) {
             Reprise.LOGGER.error("Finishing the video failed", e);

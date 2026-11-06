@@ -19,7 +19,7 @@ public abstract class HandRenderingMixin {
         var session = ReplaySession.active();
         var camera = Minecraft.getInstance().getCameraEntity();
         var override = session == null || camera == null ? null : session.project().entityOverrides.get(camera.getUUID());
-        if (override != null && override.hidden()) {
+        if (ReplaySession.hides(com.metrovoc.reprise.editor.EnvironmentSettings.Layer.PLAYERS) || override != null && override.hidden()) {
             ci.cancel();
             return;
         }

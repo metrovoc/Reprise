@@ -21,7 +21,7 @@ final class FfmpegSink implements FrameSink {
     FfmpegSink(String ffmpeg, ExportSettings settings, int width, int height, Path output, Path log) throws IOException {
         List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-y",
             "-f", "rawvideo", "-pix_fmt", "rgba", "-s", width + "x" + height, "-r", String.valueOf(settings.fps), "-i", "-",
-            "-vf", "vflip"));
+            "-vf", settings.format == ExportSettings.Format.MOV_PRORES && !settings.transparentSky ? "vflip,format=rgb24" : "vflip"));
         String q = String.valueOf(settings.quality);
         switch (settings.format) {
             case MP4_H264 -> cmd.addAll(List.of("-c:v", "libx264", "-preset", "slow", "-crf", q, "-pix_fmt", "yuv420p", "-movflags", "+faststart"));

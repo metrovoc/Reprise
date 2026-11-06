@@ -68,10 +68,12 @@ public final class EditorScreen extends Screen {
         Button orbitPoint = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.orbit_point"), b ->
             this.minecraft.setScreen(new OrbitPointScreen(this, this.session))).bounds(82, 6, 84, 20).build());
         orbitPoint.active = this.minecraft.getCameraEntity() == this.minecraft.player;
+        addRenderableWidget(Button.builder(Component.translatable("reprise.environment.title"), b ->
+            this.minecraft.setScreen(new EnvironmentScreen(this, this.session))).bounds(170, 6, 94, 20).build());
         this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
-            .bounds(170, 6, 60, 20).build());
+            .bounds(6, 30, 60, 20).build());
         this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
-            .bounds(232, 6, 60, 20).build());
+            .bounds(68, 30, 60, 20).build());
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
@@ -343,12 +345,14 @@ public final class EditorScreen extends Screen {
         }
         if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Z) {
             if (event.hasShiftDown() ? project().redo() : project().undo()) {
+                this.session.refreshEnvironment();
                 this.selected = null;
             }
             return true;
         }
         if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Y) {
             project().redo();
+            this.session.refreshEnvironment();
             this.selected = null;
             return true;
         }

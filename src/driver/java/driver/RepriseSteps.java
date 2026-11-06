@@ -24,6 +24,22 @@ import org.slf4j.Logger;
 public final class RepriseSteps {
     private static final Logger LOG = LogUtils.getLogger();
 
+    private static String precipitation;
+    private static float fogStart, fogEnd;
+    private static int fogColor;
+
+    private static void recordFog(net.neoforged.neoforge.client.event.ViewportEvent.RenderFog event) {
+        var fog = event.getFogData();
+        fogStart = fog.environmentalStart;
+        fogEnd = fog.environmentalEnd;
+        fogColor = Math.round(fog.color.x * 255) << 16 | Math.round(fog.color.y * 255) << 8 | Math.round(fog.color.z * 255);
+    }
+
+    private static void afterWeather(net.neoforged.neoforge.client.event.RenderLevelStageEvent.AfterWeather event) {
+        var state = event.getLevelRenderState().weatherRenderState;
+        precipitation = !state.snowColumns.isEmpty() ? "snow" : !state.rainColumns.isEmpty() ? "rain" : "none";
+    }
+
     @SubscribeEvent
     static void registerPayloads(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) {
         MarkerPayload.register(event);
@@ -32,6 +48,10 @@ public final class RepriseSteps {
     @SubscribeEvent
     static void setup(FMLClientSetupEvent event) {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(MarkerPayload::snapshot);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(RepriseSteps::afterWeather);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,
+            net.neoforged.neoforge.client.event.ViewportEvent.RenderFog.class, RepriseSteps::recordFog);
+        Driver.STEPS.put("pixels", FrameChecks::verify);
         Driver.STEPS.put("record", (mc, arg) -> {
             switch (arg) {
                 case "start" -> Recorder.start();
@@ -108,7 +128,8 @@ public final class RepriseSteps {
                     settings.height = Integer.parseInt(a[2]);
                     settings.fps = Integer.parseInt(a[3]);
                     settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
-                    settings.audio = a.length > 5 && a[5].equals("audio");
+                    settings.audio = java.util.Arrays.asList(a).contains("audio");
+                    settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");
                     com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
                 }
                 case "clear" -> {
@@ -117,6 +138,25 @@ public final class RepriseSteps {
                 }
                 case "dump" -> s.dump(Integer.parseInt(a[1]), Integer.parseInt(a[2]));
                 case "exit" -> s.exit();
+                case "fog" -> {
+                    if (fogStart != Float.parseFloat(a[1]) || fogEnd != Float.parseFloat(a[2]) || fogColor != Integer.parseInt(a[3], 16)) {
+                        throw new IllegalStateException("Unexpected rendered fog: " + fogStart + ".." + fogEnd + ", " + Integer.toHexString(fogColor));
+                    }
+                }
+                case "vision" -> {
+                    float actual = mc.gameRenderer.getGameRenderState().lightmapRenderState.nightVisionEffectIntensity;
+                    if (actual != Float.parseFloat(a[1])) {
+                        throw new IllegalStateException("Unexpected night vision intensity " + actual);
+                    }
+                }
+                case "environment" -> {
+                    long time = Math.floorMod(mc.level.getOverworldClockTime(), 24000L);
+                    float rain = mc.level.getRainLevel(1), thunder = mc.level.getThunderLevel(1);
+                    if (time != Long.parseLong(a[1]) || rain != Float.parseFloat(a[2]) || thunder != Float.parseFloat(a[3])
+                        || !precipitation.equals(a[4])) {
+                        throw new IllegalStateException("Expected " + arg + " but got " + time + " " + rain + " " + thunder + " " + precipitation);
+                    }
+                }
                 case "camera_at" -> {
                     var expected = new net.minecraft.world.phys.Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
                     if (mc.player.position().distanceTo(expected) > 0.025) {

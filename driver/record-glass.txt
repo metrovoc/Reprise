@@ -1,0 +1,12 @@
+world
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+cmd tp @s 0 -60 0 0 -32
+cmd fill -2 -56 5 2 -54 5 minecraft:blue_stained_glass
+cmd setblock 0 -55 5 minecraft:gold_block
+wait 35
+record start
+wait 35
+record stop
+quit

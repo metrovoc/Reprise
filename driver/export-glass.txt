@@ -1,0 +1,22 @@
+replay latest
+wait 50
+replay seek 0
+replay camera 0 -60 0 0 -32
+replay keyframe
+replay editor
+press Environment
+press Clear
+press Scene layers
+press Clouds:
+press Players:
+field Sky_color_(hex) 00FF00
+press Solid sky
+press Done
+press Done
+replay close
+replay export 640 360 20 PNG_SEQUENCE
+wait 100
+replay export 640 360 20 PNG_SEQUENCE alpha
+wait 100
+pixels composite 20 glass
+quit

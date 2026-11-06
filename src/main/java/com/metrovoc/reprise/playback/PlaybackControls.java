@@ -3,6 +3,7 @@ package com.metrovoc.reprise.playback;
 import com.metrovoc.reprise.RepriseKeys;
 import com.metrovoc.reprise.editor.EditorScreen;
 import com.metrovoc.reprise.editor.Keyframe;
+import com.metrovoc.reprise.editor.EnvironmentSettings.Weather;
 import com.metrovoc.reprise.editor.ReplayProject;
 import com.metrovoc.reprise.gui.Timecode;
 import com.metrovoc.reprise.gui.Timeline;
@@ -75,6 +76,36 @@ public final class PlaybackControls {
             var session = ReplaySession.active();
             if (session != null && session.project().hideNames) {
                 e.setCanceled(true);
+            }
+        });
+        bus.addListener(net.neoforged.neoforge.client.event.sound.PlaySoundEvent.class, event -> {
+            var session = ReplaySession.active();
+            if (session == null || event.getSound() == null) {
+                return;
+            }
+            var weather = session.project().environment.weather;
+            var id = event.getSound().getIdentifier();
+            if (id.getNamespace().equals("minecraft") && switch (id.getPath()) {
+                case "entity.lightning_bolt.thunder", "entity.lightning_bolt.impact" -> weather.hidesLightning();
+                case "weather.rain", "weather.rain.above" -> weather == Weather.CLEAR
+                    || weather == Weather.OVERCAST || weather == Weather.SNOW;
+                default -> false;
+            }) {
+                event.setSound(null);
+            }
+        });
+        bus.addListener(ViewportEvent.RenderFog.class, event -> {
+            var session = ReplaySession.active();
+            if (session == null || session.project().environment.fog == null) {
+                return;
+            }
+            var settings = session.project().environment.fog;
+            var fog = event.getFogData();
+            fog.environmentalStart = fog.renderDistanceStart = settings.start();
+            fog.environmentalEnd = fog.renderDistanceEnd = fog.skyEnd = fog.cloudEnd = settings.end();
+            if (settings.color() != null) {
+                int rgb = settings.color();
+                fog.color.set((rgb >> 16 & 255) / 255f, (rgb >> 8 & 255) / 255f, (rgb & 255) / 255f, fog.color.w);
             }
         });
         bus.addListener(ScreenEvent.Init.Post.class, e -> {
