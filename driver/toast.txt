@@ -1,0 +1,12 @@
+toasts on
+world
+fly on
+cmd tp @s 0 -55 0 0 20
+wait 60
+key escape
+wait 5
+shot t_menu
+press ■ Stop
+wait 5
+shot t_saved_toast
+quit
