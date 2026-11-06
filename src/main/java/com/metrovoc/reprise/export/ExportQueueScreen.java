@@ -25,7 +25,7 @@ final class ExportQueueScreen extends Screen {
     private ShotList list;
     private Button up, down, remove, render;
     private int selection = -1;
-    private int returnTick;
+    private double returnTick;
     private CameraPose returnCamera;
     private UUID returnTarget;
     private String draftName = "";
@@ -61,7 +61,7 @@ final class ExportQueueScreen extends Screen {
             select(Math.min(selection, editor.renderQueue.size() - 1));
         });
         render = button("render", x, y + 24, 148, () -> {
-            returnTick = session.tick();
+            returnTick = session.visualTick(1);
             returnCamera = camera();
             returnTarget = session.spectatedId();
             next();
@@ -144,7 +144,7 @@ final class ExportQueueScreen extends Screen {
             return;
         }
         if (showScreen) {
-            session.seek(returnTick);
+            session.seekEditorCursor(returnTick);
             apply(returnCamera, returnTarget);
         } else {
             minecraft.options.fov().set(Math.round(returnCamera.fov()));
@@ -168,7 +168,7 @@ final class ExportQueueScreen extends Screen {
 
     private final class ShotList extends ObjectSelectionList<Row> {
         ShotList() {
-            super(ExportQueueScreen.this.minecraft, ExportQueueScreen.this.width, ExportQueueScreen.this.height - 118, 45, 30);
+            super(ExportQueueScreen.this.minecraft, ExportQueueScreen.this.width, ExportQueueScreen.this.height - 118, 45, 40);
             for (int i = 0; i < editor.renderQueue.size(); i++) addEntry(new Row(i));
         }
 
@@ -190,22 +190,25 @@ final class ExportQueueScreen extends Screen {
     private final class Row extends ObjectSelectionList.Entry<Row> {
         private final int index;
         private final String range, format;
+        private final Component output;
         Row(int index) {
             this.index = index;
             var project = editor.renderQueue.get(index).project();
             var settings = project.export;
             String name = editor.renderQueue.get(index).name();
-            range = (name == null || name.isBlank() ? "" : name + " · ") + Timecode.precise(project.start()) + " – " + Timecode.precise(project.end(session.duration()));
-            format = settings.format.label + " · " + settings.width + "×" + settings.height + " · " + settings.fps + " fps";
+            range = (name == null || name.isBlank() ? "" : name + " · ") + Timecode.precise(project.start()) + " – " + Timecode.precise(project.end(project.shotDuration(session.meta().durationTicks)));
+            format = settings.format.label + " · " + settings.outputWidth() + "×" + settings.outputHeight() + " · " + settings.fps + " fps";
+            output = ExportScreen.outputSummary(project, session.meta().durationTicks);
         }
 
         @Override
-        public Component getNarration() { return Component.literal(range + ", " + format); }
+        public Component getNarration() { return Component.literal(range + ", " + format + ", ").append(output); }
 
         @Override
         public void extractContent(GuiGraphicsExtractor g, int x, int y, boolean hovered, float partial) {
             g.text(font, font.plainSubstrByWidth(range, getContentWidth() - 4), getContentX() + 2, getContentY(), 0xFFFFFFFF);
             g.text(font, format, getContentX() + 2, getContentY() + 11, 0xFFACACAC);
+            g.text(font, output, getContentX() + 2, getContentY() + 22, 0xFFACACAC);
         }
 
         @Override

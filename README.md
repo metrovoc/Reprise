@@ -204,7 +204,8 @@ follows the replay and the shader frame counter advances once per exported frame
 
 To batch shots from one replay, open **Queue** in the export screen and choose **Add current shot**.
 Each entry saves the current range, camera path or viewpoint, spectated player, scene settings, and encoder
-settings. You can name, reorder, or remove shots before choosing **Render queue**. Completed shots leave
+settings. Each shot shows its encoded dimensions, frame count, and output duration, including speed changes
+and freezes. You can name, reorder, or remove shots before choosing **Render queue**. Completed shots leave
 the queue. Cancelling or hitting an error keeps the unfinished shot and later entries for retry, even after
 restarting Minecraft.
 

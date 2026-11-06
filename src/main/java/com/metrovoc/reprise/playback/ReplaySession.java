@@ -269,7 +269,7 @@ public final class ReplaySession {
     public int recordedTick() { return this.tick; }
 
     public int duration() {
-        return Math.addExact(meta.durationTicks, project().addedTicks());
+        return project().shotDuration(meta.durationTicks);
     }
 
     /** Export can render multiple camera poses at one world instant without ticking the client simulation. */

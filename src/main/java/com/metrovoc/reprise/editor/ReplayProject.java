@@ -40,6 +40,10 @@ public final class ReplayProject {
     public record Freeze(double worldTick, int length) {}
     public List<Freeze> freezes = new ArrayList<>();
 
+    public int shotDuration(int recordedTicks) {
+        return Math.addExact(recordedTicks, addedTicks());
+    }
+
     public int addedTicks() {
         int extra = 0;
         for (var freeze : freezes) extra = Math.addExact(extra, freeze.length);

@@ -32,7 +32,7 @@ public final class ExportScreen extends Screen {
     private Button depthButton;
     private Button encoderButton;
     private Button qualityButton;
-    private long frameCount;
+    private Component outputSummary;
     private boolean shaders;
 
     public ExportScreen(Screen parent, ReplaySession session) {
@@ -44,7 +44,7 @@ public final class ExportScreen extends Screen {
 
     @Override
     protected void init() {
-        updateFrameCount();
+        updateOutputSummary();
         this.shaders = ShaderPacks.active();
         this.ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
         int w = 200;
@@ -79,7 +79,7 @@ public final class ExportScreen extends Screen {
         });
         cycle(x, y + 48, w / 2 - 2, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> {
             this.settings.fps = next(FRAME_RATES, this.settings.fps);
-            updateFrameCount();
+            updateOutputSummary();
         });
         addRenderableWidget(Button.builder(Component.translatable("reprise.queue.open", this.session.project().renderQueue.size()),
             b -> this.minecraft.setScreen(new ExportQueueScreen(this, this.session))).bounds(x + w / 2 + 2, y + 48, w / 2 - 2, 20).build());
@@ -104,6 +104,7 @@ public final class ExportScreen extends Screen {
             .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.ssaa.tooltip")));
         this.alphaButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             this.session.project().checkpoint();
+            error = null;
             this.settings.transparentSky = !this.settings.transparentSky;
             this.session.project().save();
             updatePasses();
@@ -117,6 +118,7 @@ public final class ExportScreen extends Screen {
                     int fov = 120 + (int) Math.round(value * 48) * 5;
                     if (fov != settings.panoramaFov) {
                         if (!dragging) session.project().checkpoint();
+                        error = null;
                         settings.panoramaFov = fov;
                         if (!dragging) session.project().save();
                     }
@@ -164,9 +166,15 @@ public final class ExportScreen extends Screen {
         return Component.translatable("reprise.export.coverage", settings.panoramaFov);
     }
 
-    private void updateFrameCount() {
-        var project = this.session.project();
-        this.frameCount = project.frameSchedule(project.start(), project.end(this.session.duration()), this.settings.fps).frameCount();
+    private void updateOutputSummary() {
+        outputSummary = outputSummary(session.project(), session.meta().durationTicks);
+    }
+
+    static Component outputSummary(ReplayProject project, int recordedTicks) {
+        int fps = project.export.fps;
+        int end = project.end(project.shotDuration(recordedTicks));
+        long frames = project.frameSchedule(project.start(), end, fps).frameCount();
+        return Component.translatable("reprise.export.output_duration", Timecode.outputDuration(frames, fps), frames);
     }
 
     private boolean hardware() {
@@ -207,6 +215,7 @@ public final class ExportScreen extends Screen {
     private Button cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
         Button button = Button.builder(label.get(), b -> {
             this.session.project().checkpoint();
+            error = null;
             next.run();
             b.setMessage(label.get());
             this.session.project().save();
@@ -224,6 +233,7 @@ public final class ExportScreen extends Screen {
     }
 
     private void startExport() {
+        error = null;
         try {
             this.session.project().save();
             VideoExporter.start(this.session, this.settings, this.parent);
@@ -237,19 +247,28 @@ public final class ExportScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         super.extractRenderState(g, mouseX, mouseY, a);
         g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 107, 0xFFFFFFFF);
+        Component problem = error == null ? null : Component.literal(error);
+        if (problem == null && settings.format != ExportSettings.Format.PNG_SEQUENCE && ffmpeg == null) {
+            problem = Component.translatable("reprise.export.no_ffmpeg");
+        }
+        if (problem != null) {
+            int y = height / 2 + 80;
+            for (var line : font.split(problem, width - 16)) {
+                if (y + font.lineHeight > height) break;
+                g.centeredText(font, line, width / 2, y, 0xFFFF6060);
+                y += font.lineHeight;
+            }
+            if (mouseY >= height / 2 + 80) g.setTooltipForNextFrame(problem, mouseX, mouseY);
+            return;
+        }
         ReplayProject project = this.session.project();
         int start = project.start(), end = project.end(this.session.duration());
-        String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end), this.frameCount).getString();
-        g.centeredText(this.font, range, this.width / 2, this.height / 2 + 84, 0xFFB0B0B8);
+        String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end)).getString();
+        g.centeredText(this.font, range, this.width / 2, this.height / 2 + 80, 0xFFB0B0B8);
+        g.centeredText(font, outputSummary, width / 2, height / 2 + 90, 0xFFFFFFFF);
         String camera = project.keyframes.isEmpty() ? Component.translatable("reprise.export.no_keyframes").getString()
             : Component.translatable("reprise.export.keyframes", project.keyframes.size()).getString();
-        g.centeredText(this.font, camera, this.width / 2, this.height / 2 + 94, 0xFFB0B0B8);
-        if (this.settings.format != ExportSettings.Format.PNG_SEQUENCE && this.ffmpeg == null) {
-            g.centeredText(this.font, Component.translatable("reprise.export.no_ffmpeg"), this.width / 2, this.height / 2 + 108, 0xFFFF6060);
-        }
-        if (this.error != null) {
-            g.centeredText(this.font, this.error, this.width / 2, this.height / 2 + 120, 0xFFFF6060);
-        }
+        g.centeredText(this.font, camera, this.width / 2, this.height / 2 + 100, 0xFFB0B0B8);
     }
 
     @Override
