@@ -71,6 +71,7 @@ public final class RepriseSteps {
                     settings.height = Integer.parseInt(a[2]);
                     settings.fps = Integer.parseInt(a[3]);
                     settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
+                    settings.audio = a.length > 5 && a[5].equals("audio");
                     com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);
                 }
                 case "clear" -> {

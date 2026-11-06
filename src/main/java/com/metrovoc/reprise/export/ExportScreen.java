@@ -35,7 +35,7 @@ public final class ExportScreen extends Screen {
         this.ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
         int w = 200;
         int x = this.width / 2 - w / 2;
-        int y = this.height / 2 - 70;
+        int y = this.height / 2 - 80;
         cycle(x, y, w, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
             ExportSettings.Format[] all = ExportSettings.Format.values();
             this.settings.format = all[(this.settings.format.ordinal() + 1) % all.length];
@@ -52,10 +52,12 @@ public final class ExportScreen extends Screen {
             this.settings.height = r[1];
         });
         cycle(x, y + 48, w, () -> Component.translatable("reprise.export.fps", this.settings.fps), () -> this.settings.fps = next(FRAME_RATES, this.settings.fps));
+        cycle(x, y + 96, w, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
+            () -> this.settings.audio = !this.settings.audio);
         cycle(x, y + 72, w, () -> Component.translatable("reprise.export.quality", this.settings.quality), () -> this.settings.quality = next(QUALITIES, this.settings.quality));
 
-        addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 120, w / 2 - 2, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 120, w / 2 - 2, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 128, w / 2 - 2, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 128, w / 2 - 2, 20).build());
     }
 
     private void cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
@@ -89,20 +91,20 @@ public final class ExportScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         super.extractRenderState(g, mouseX, mouseY, a);
-        g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 96, 0xFFFFFFFF);
+        g.centeredText(this.font, this.title, this.width / 2, this.height / 2 - 100, 0xFFFFFFFF);
         ReplayProject project = this.session.project();
         int start = project.start(), end = project.end(this.session.duration());
         int frames = project.frameTicks(start, end, this.settings.fps).length;
         String range = Component.translatable("reprise.export.range", Timecode.precise(start), Timecode.precise(end), frames).getString();
-        g.centeredText(this.font, range, this.width / 2, this.height / 2 + 28, 0xFFB0B0B8);
+        g.centeredText(this.font, range, this.width / 2, this.height / 2 + 84, 0xFFB0B0B8);
         String camera = project.keyframes.isEmpty() ? Component.translatable("reprise.export.no_keyframes").getString()
             : Component.translatable("reprise.export.keyframes", project.keyframes.size()).getString();
-        g.centeredText(this.font, camera, this.width / 2, this.height / 2 + 38, 0xFFB0B0B8);
+        g.centeredText(this.font, camera, this.width / 2, this.height / 2 + 94, 0xFFB0B0B8);
         if (this.settings.format != ExportSettings.Format.PNG_SEQUENCE && this.ffmpeg == null) {
-            g.centeredText(this.font, Component.translatable("reprise.export.no_ffmpeg"), this.width / 2, this.height / 2 + 76, 0xFFFF6060);
+            g.centeredText(this.font, Component.translatable("reprise.export.no_ffmpeg"), this.width / 2, this.height / 2 + 108, 0xFFFF6060);
         }
         if (this.error != null) {
-            g.centeredText(this.font, this.error, this.width / 2, this.height / 2 + 88, 0xFFFF6060);
+            g.centeredText(this.font, this.error, this.width / 2, this.height / 2 + 120, 0xFFFF6060);
         }
     }
 

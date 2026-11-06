@@ -58,12 +58,30 @@ final class FfmpegSink implements FrameSink {
             Reprise.LOGGER.error("ffmpeg failed ({}); see {}", this.process.exitValue(), this.log);
             return false;
         }
+        Files.deleteIfExists(this.log);
         return true;
     }
 
     @Override
     public void abort() {
         this.process.destroyForcibly();
+    }
+
+    /** Runs ffmpeg once with these arguments; true if it succeeded. */
+    static boolean run(String ffmpeg, List<String> args, Path log) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-y"));
+        cmd.addAll(args);
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        if (!p.waitFor(10, TimeUnit.MINUTES)) {
+            p.destroyForcibly();
+            return false;
+        }
+        if (p.exitValue() == 0) {
+            Files.deleteIfExists(log);
+            return true;
+        }
+        Reprise.LOGGER.error("ffmpeg failed ({}); see {}", p.exitValue(), log);
+        return false;
     }
 
     /** The ffmpeg to use: the configured path, then the game folder, then PATH and the usual install folders. */

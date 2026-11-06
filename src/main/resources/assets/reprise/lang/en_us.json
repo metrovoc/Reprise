@@ -71,5 +71,7 @@
   "reprise.editor.speed_key.tooltip": "From here on, previews and exports play at the speed set with − and +. Right-click a speed key to remove it.",
   "reprise.editor.speed_key.hover": "Speed %s · right-click to remove",
   "reprise.editor.marker.hover": "Marker %s · double-click to jump",
-  "reprise.recording.indicator.paused": "Paused"
+  "reprise.recording.indicator.paused": "Paused",
+  "reprise.export.audio.on": "Sound: On",
+  "reprise.export.audio.off": "Sound: Off"
 }

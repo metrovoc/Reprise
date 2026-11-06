@@ -1,0 +1,10 @@
+replay latest
+wait 100
+replay clear
+replay spectate
+replay seek 0
+wait 5
+replay export 1280 720 30 MP4_H264 audio
+wait 300
+replay state
+quit

@@ -14,7 +14,9 @@
     "export.GameRendererMixin",
     "playback.RenderSectionMixin",
     "playback.HandRenderingMixin",
-    "playback.ItemInHandRendererMixin"
+    "playback.ItemInHandRendererMixin",
+    "export.LibraryMixin",
+    "export.SoundEngineMixin"
   ],
   "injectors": {
     "defaultRequire": 1

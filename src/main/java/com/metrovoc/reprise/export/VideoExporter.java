@@ -42,6 +42,7 @@ public final class VideoExporter {
     private final Path output;
     private final Screen returnTo;
     private final FrameSink sink;
+    private final AudioCapture audio;
     private final BlockingQueue<byte[]> frames = new ArrayBlockingQueue<>(6);
     private final Thread writer;
     private volatile Throwable writeError;
@@ -64,6 +65,7 @@ public final class VideoExporter {
     private final boolean savedVsync;
     private final double savedVolume;
     private final double savedFade;
+    private final double savedMusic;
 
     private VideoExporter(ReplaySession session, ExportSettings settings, Screen returnTo) throws Exception {
         this.session = session;
@@ -90,6 +92,7 @@ public final class VideoExporter {
             this.output = dir.resolve(base + "." + settings.format.extension);
             this.sink = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.output, dir.resolve(base + ".log"));
         }
+        this.audio = settings.audio ? new AudioCapture(dir.resolve(base + ".f32"), settings.fps) : null;
         this.writer = new Thread(this::write, "Reprise Export Writer");
         this.writer.setDaemon(true);
         this.writer.start();
@@ -103,7 +106,16 @@ public final class VideoExporter {
         options.hideGui = true;
         options.framerateLimit().set(260);
         options.enableVsync().set(false);
-        options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.0);
+        this.savedMusic = options.getSoundSourceOptionInstance(SoundSource.MUSIC).get();
+        if (this.audio == null) {
+            options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.0);
+        } else {
+            // The replay's own sounds only: music is the viewer's, not the recording's.
+            options.getSoundSourceOptionInstance(SoundSource.MUSIC).set(0.0);
+            if (this.savedVolume == 0) {
+                options.getSoundSourceOptionInstance(SoundSource.MASTER).set(1.0);
+            }
+        }
         options.chunkSectionFadeInTime().set(0.0);
     }
 
@@ -121,6 +133,9 @@ public final class VideoExporter {
         }
         VideoExporter exporter = new VideoExporter(session, settings, returnTo);
         running = exporter;
+        if (exporter.audio != null) {
+            exporter.audio.start();
+        }
         session.setPlaying(false);
         session.seek(exporter.start);
         CameraPath.setForced(true);
@@ -246,6 +261,13 @@ public final class VideoExporter {
         }
         this.waited = 0;
         readBack();
+        if (this.audio != null) {
+            try {
+                this.audio.frame();
+            } catch (java.io.IOException e) {
+                this.writeError = e;
+            }
+        }
         this.frame++;
         if (this.frame % PROGRESS_EVERY == 0) {
             this.progressFrame = true;
@@ -318,6 +340,10 @@ public final class VideoExporter {
                 this.frames.put(new byte[0]);
                 this.writer.join();
                 ok = this.writeError == null && this.sink.finish();
+                if (ok && this.audio != null) {
+                    this.audio.stop();
+                    ok = addAudio();
+                }
             } else {
                 this.writer.interrupt();
                 this.sink.abort();
@@ -325,6 +351,15 @@ public final class VideoExporter {
         } catch (Exception e) {
             Reprise.LOGGER.error("Finishing the video failed", e);
             ok = false;
+        }
+        if (this.audio != null && AudioCapture.loopback()) {
+            this.audio.stop();
+        }
+        if (this.audio != null) {
+            try {
+                java.nio.file.Files.deleteIfExists(this.audio.file());
+            } catch (java.io.IOException ignored) {
+            }
         }
         restore();
         running = null;
@@ -334,6 +369,38 @@ public final class VideoExporter {
         this.mc.setScreen(new ExportDoneScreen(this.returnTo, ok, message, this.output));
     }
 
+    /** Muxes the captured sound into the video, or writes it next to a PNG sequence. */
+    private boolean addAudio() {
+        String ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
+        if (ffmpeg == null) {
+            return true;
+        }
+        try {
+            if (this.settings.format == ExportSettings.Format.PNG_SEQUENCE) {
+                return FfmpegSink.run(ffmpeg, java.util.List.of("-f", "f32le", "-ar", String.valueOf(AudioCapture.RATE), "-ac", "2",
+                    "-i", this.audio.file().toString(), this.output.resolve("audio.wav").toString()), this.output.resolve("audio.log"));
+            }
+            String name = this.output.getFileName().toString();
+            Path muxed = this.output.resolveSibling(name.replaceFirst("(\\.[^.]+)$", ".audio$1"));
+            String codec = switch (this.settings.format) {
+                case WEBM_VP9 -> "libopus";
+                case MOV_PRORES -> "pcm_s16le";
+                default -> "aac";
+            };
+            boolean ok = FfmpegSink.run(ffmpeg, java.util.List.of("-i", this.output.toString(),
+                "-f", "f32le", "-ar", String.valueOf(AudioCapture.RATE), "-ac", "2", "-i", this.audio.file().toString(),
+                "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", codec, "-b:a", "256k", "-shortest", muxed.toString()),
+                this.output.resolveSibling(name + ".audio.log"));
+            if (ok) {
+                java.nio.file.Files.move(muxed, this.output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return ok;
+        } catch (Exception e) {
+            Reprise.LOGGER.error("Adding the sound failed", e);
+            return false;
+        }
+    }
+
     private void restore() {
         var options = this.mc.options;
         options.hideGui = this.savedHideGui;
@@ -341,6 +408,7 @@ public final class VideoExporter {
         options.enableVsync().set(this.savedVsync);
         options.getSoundSourceOptionInstance(SoundSource.MASTER).set(this.savedVolume);
         options.chunkSectionFadeInTime().set(this.savedFade);
+        options.getSoundSourceOptionInstance(SoundSource.MUSIC).set(this.savedMusic);
         CameraPath.setForced(false);
         this.session.setPlaying(false);
         this.mc.resizeGui();
