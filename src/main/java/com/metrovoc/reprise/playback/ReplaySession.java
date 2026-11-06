@@ -147,6 +147,7 @@ public final class ReplaySession {
             active = new ReplaySession(file, exitScreen);
             mc.setScreen(new GenericMessageScreen(Component.translatable("reprise.replay.loading")));
             active.playSnapshot(0);
+            active.applyResetsAtCurrentTick();
         } catch (Exception e) {
             Reprise.LOGGER.error("Could not open replay {}", path, e);
             if (active != null) {
@@ -370,6 +371,7 @@ public final class ReplaySession {
             switch (action) {
                 case Actions.TICK -> {
                     this.tick++;
+                    applyResetsAtCurrentTick();
                     return;
                 }
                 case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
@@ -379,6 +381,17 @@ public final class ReplaySession {
                 default -> throw new IllegalStateException("Unknown action " + action + " in segment " + this.segment);
             }
         }
+    }
+
+    /** A reset owns its first tick in both continuous playback and seeking. A cut may follow an empty segment. */
+    private void applyResetsAtCurrentTick() {
+        int reset = this.segment;
+        for (int i = this.segment + 1; i < this.meta.segments.size(); i++) {
+            var next = this.meta.segments.get(i);
+            if (next.startTick != this.tick) break;
+            if (next.reset) reset = i;
+        }
+        if (reset != this.segment) playSnapshot(reset);
     }
 
     private void enterNextSegment() {

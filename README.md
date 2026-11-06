@@ -22,7 +22,9 @@ held items, swings, block breaking, block placement and sounds.
 
 ## Watching
 
-Open **Replays** on the title screen and pick one.
+Open **Replays** on the title screen and pick a recording to watch. To play two recordings back to back,
+select the first, choose **Join recordings…**, then select the second and confirm. Reprise creates a new
+recording with its own editor project. Markers from both recordings appear on the combined timeline.
 
 | Key | Action |
 | --- | --- |

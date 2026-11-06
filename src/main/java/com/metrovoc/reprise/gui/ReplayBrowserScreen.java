@@ -4,6 +4,7 @@ import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.format.ReplayFile;
 import com.metrovoc.reprise.format.ReplayMeta;
+import com.metrovoc.reprise.format.ReplayJoiner;
 import com.metrovoc.reprise.playback.ReplaySession;
 import com.metrovoc.reprise.record.ReplayPacker;
 import java.io.IOException;
@@ -18,8 +19,11 @@ import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.GenericMessageScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -28,12 +32,22 @@ import net.minecraft.util.Util;
 /** Lists the replays in the replays folder. */
 public final class ReplayBrowserScreen extends Screen {
     private final Screen parent;
+    private final Path joinFirst;
+    private Path selectOnOpen;
     private ReplayList list;
     private Button playButton;
     private Button deleteButton;
+    private Button joinButton;
+    private String outputName = "";
 
     public ReplayBrowserScreen(Screen parent) {
-        super(Component.translatable("reprise.browser.title"));
+        this(parent, null);
+    }
+
+    private ReplayBrowserScreen(Screen parent, Path joinFirst) {
+        super(joinFirst == null ? Component.translatable("reprise.browser.title")
+            : Component.translatable("reprise.browser.choose_next", joinFirst.getFileName().toString()));
+        this.joinFirst = joinFirst;
         this.parent = parent;
     }
 
@@ -48,28 +62,75 @@ public final class ReplayBrowserScreen extends Screen {
         int y = this.height - 52;
         int w = 150;
         int x = this.width / 2 - w - 4;
-        this.playButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.play"), b -> play())
-            .bounds(x, y, w, 20).build());
-        this.deleteButton = this.addRenderableWidget(Button.builder(Component.translatable("selectWorld.delete"), b -> delete())
-            .bounds(x + w + 8, y, w, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.folder"), b -> Util.getPlatform().openPath(ReprisePaths.replays()))
-            .bounds(x, y + 24, w, 20).build());
+        if (this.joinFirst == null) {
+            this.playButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.play"), b -> play())
+                .bounds(x, y, w, 20).build());
+            this.joinButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.join"), b ->
+                this.minecraft.setScreen(new ReplayBrowserScreen(this, this.list.getSelected().path)))
+                .bounds(x + w + 8, y, w, 20).build());
+            this.deleteButton = this.addRenderableWidget(Button.builder(Component.translatable("selectWorld.delete"), b -> delete())
+                .bounds(x, y + 24, w / 2 - 2, 20).build());
+            this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.folder"), b -> Util.getPlatform().openPath(ReprisePaths.replays()))
+                .bounds(x + w / 2 + 2, y + 24, w / 2 - 2, 20).build());
+        } else {
+            var label = Component.translatable("reprise.browser.join_name");
+            var name = this.addRenderableWidget(new EditBox(this.font, x, y, 2 * w + 8, 20, label));
+            name.setMaxLength(60);
+            name.setHint(label);
+            name.setValue(this.outputName);
+            name.setResponder(value -> this.outputName = value);
+            this.playButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.join_selected"), b -> play())
+                .bounds(x, y + 24, w, 20).build());
+        }
         this.addRenderableWidget(Button.builder(Component.translatable("gui.back"), b -> onClose())
             .bounds(x + w + 8, y + 24, w, 20).build());
+        if (this.selectOnOpen != null) {
+            this.list.children().stream().filter(entry -> entry.path.equals(this.selectOnOpen)).findFirst().ifPresent(this.list::setSelected);
+            this.selectOnOpen = null;
+        }
         updateButtons();
     }
 
     private void updateButtons() {
         boolean selected = this.list.getSelected() != null;
         this.playButton.active = selected;
-        this.deleteButton.active = selected;
+        if (this.deleteButton != null) this.deleteButton.active = selected;
+        if (this.joinButton != null) this.joinButton.active = selected && this.list.children().size() > 1;
     }
 
     private void play() {
         ReplayList.ReplayEntry entry = this.list.getSelected();
         if (entry != null) {
-            ReplaySession.open(entry.path, this);
+            if (this.joinFirst == null) {
+                ReplaySession.open(entry.path, this);
+            } else {
+                join(entry.path);
+            }
         }
+    }
+
+    private void join(Path second) {
+        var client = this.minecraft;
+        var progress = new GenericMessageScreen(Component.translatable("reprise.browser.joining"));
+        client.setScreen(progress);
+        String name = this.outputName;
+        Thread.startVirtualThread(() -> {
+            try {
+                Path result = ReplayJoiner.join(this.joinFirst, second, name);
+                client.execute(() -> {
+                    if (client.screen == progress) {
+                        ((ReplayBrowserScreen) this.parent).selectOnOpen = result;
+                        client.setScreen(this.parent);
+                    }
+                });
+            } catch (Exception e) {
+                Reprise.LOGGER.warn("Could not join recordings", e);
+                client.execute(() -> {
+                    if (client.screen == progress) client.setScreen(new AlertScreen(() -> client.setScreen(this),
+                        Component.translatable("reprise.browser.join_failed"), Component.literal(String.valueOf(e.getMessage()))));
+                });
+            }
+        });
     }
 
     private void delete() {
@@ -109,6 +170,7 @@ public final class ReplayBrowserScreen extends Screen {
             List<ReplayEntry> entries = new ArrayList<>();
             try (Stream<Path> files = Files.list(ReprisePaths.replays())) {
                 for (Path path : files.filter(p -> p.toString().endsWith(ReplayPacker.EXTENSION)).toList()) {
+                    if (path.equals(joinFirst)) continue;
                     try {
                         entries.add(new ReplayEntry(path, ReplayFile.readMeta(path)));
                     } catch (Exception e) {
