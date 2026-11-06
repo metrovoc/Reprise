@@ -119,6 +119,12 @@ public final class RepriseSteps {
                 }
                 case "play" -> s.setPlaying(true);
                 case "pause" -> s.setPlaying(false);
+                case "tick_millis" -> {
+                    double expected = Double.parseDouble(a[1]);
+                    if (Math.abs(s.millisPerTick() - expected) > 0.001) {
+                        throw new IllegalStateException("Expected " + expected + " ms per tick, got " + s.millisPerTick());
+                    }
+                }
                 case "speed" -> s.setSpeed(Float.parseFloat(a[1]));
                 case "seek" -> {
                     int target = Math.clamp(Integer.parseInt(a[1]), 0, s.duration());

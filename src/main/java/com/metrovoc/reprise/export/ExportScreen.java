@@ -27,7 +27,7 @@ public final class ExportScreen extends Screen {
     private Button alphaButton;
     private Button encoderButton;
     private Button qualityButton;
-    private int frameCount;
+    private long frameCount;
     private boolean shaders;
 
     public ExportScreen(Screen parent, ReplaySession session) {
@@ -114,7 +114,7 @@ public final class ExportScreen extends Screen {
 
     private void updateFrameCount() {
         var project = this.session.project();
-        this.frameCount = project.frameTicks(project.start(), project.end(this.session.duration()), this.settings.fps).length;
+        this.frameCount = project.frameSchedule(project.start(), project.end(this.session.duration()), this.settings.fps).frameCount();
     }
 
     private boolean hardware() {

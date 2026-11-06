@@ -3,6 +3,7 @@ package com.metrovoc.reprise.export;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.editor.ExportSettings;
+import com.metrovoc.reprise.editor.FrameSchedule;
 import com.metrovoc.reprise.playback.CameraPath;
 import com.metrovoc.reprise.playback.ReplaySession;
 import com.mojang.blaze3d.buffers.GpuBuffer;
@@ -45,7 +46,7 @@ public final class VideoExporter {
     private final boolean sodium = net.neoforged.fml.ModList.get().isLoaded("sodium");
     private final ExportSettings settings;
     private final int start, end, width, height;
-    private final double[] frameTicks;
+    private final FrameSchedule schedule;
     private final int totalFrames;
     private final ExportFiles files;
     private final Screen returnTo;
@@ -99,8 +100,11 @@ public final class VideoExporter {
         }
         this.renderWidth = this.width * scale;
         this.renderHeight = this.height * scale;
-        this.frameTicks = session.project().frameTicks(this.start, this.end, settings.fps);
-        this.totalFrames = this.frameTicks.length;
+        this.schedule = session.project().frameSchedule(this.start, this.end, settings.fps);
+        if (this.schedule.frameCount() > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("This range exceeds the supported video frame count");
+        }
+        this.totalFrames = (int) this.schedule.frameCount();
         if (this.totalFrames == 0) {
             throw new IllegalArgumentException("The export range contains no frames");
         }
@@ -220,7 +224,7 @@ public final class VideoExporter {
     }
 
     public float shaderTimeSeconds() {
-        double tick = this.frameTicks[Math.min(this.frame, this.totalFrames - 1)];
+        double tick = this.schedule.tickAt(Math.min(this.frame, this.totalFrames - 1));
         return (float) ((tick / 20.0) % 3600.0);
     }
 
@@ -274,10 +278,10 @@ public final class VideoExporter {
         if (!this.session.isPlaying()) {
             this.session.setPlaying(true);
         }
-        double target = this.frameTicks[this.frame];
-        int needTick = (int) Math.floor(target) + 1;
+        double target = this.schedule.tickAt(this.frame);
+        int needTick = target >= this.session.duration() ? this.session.duration() : (int) target + 1;
         int ticks = Math.max(0, needTick - this.session.tick());
-        partial[0] = (float) (target - Math.floor(target));
+        partial[0] = (float) (target - needTick + 1);
         this.neededTick = needTick;
         this.captureThisFrame = true;
         return ticks;
@@ -317,8 +321,8 @@ public final class VideoExporter {
     }
 
     private float currentPartial() {
-        double target = this.frameTicks[Math.max(0, Math.min(this.totalFrames - 1, this.frame - 1))];
-        return (float) (target - Math.floor(target));
+        double target = this.schedule.tickAt(Math.max(0, Math.min(this.totalFrames - 1, this.frame - 1)));
+        return target >= this.session.duration() ? 1 : (float) (target - Math.floor(target));
     }
 
     /** Called after the frame is rendered. */

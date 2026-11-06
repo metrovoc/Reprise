@@ -315,8 +315,10 @@ public final class ReplaySession {
     /** Milliseconds per client tick while this replay plays. */
     public float millisPerTick() {
         // The path preview plays as the export will: at the speed keys' speed.
-        double speed = CameraPath.preview() && !project().speedKeys.isEmpty() ? project().speedAt(this.tick) : this.speed;
-        return (float) (50.0 / Math.max(0.01, speed));
+        if (CameraPath.preview() && !project().speedKeys.isEmpty()) {
+            return project().previewMillisPerTick(this.tick, duration());
+        }
+        return (float) (50.0 / Math.max(0.01, this.speed));
     }
 
     /** Moves to {@code target} (in recorded ticks), keeping the camera where it is. */
