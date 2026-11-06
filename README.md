@@ -87,6 +87,9 @@ to finish building. With Sodium, Reprise requests synchronous terrain rendering 
 follows the replay and the shader frame counter advances once per exported frame.
 
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
+- H.264 and H.265 support CPU encoding with constant quality, or GPU encoding with a target bitrate.
+  Reprise tests the chosen resolution and frame rate before starting a GPU export. It checks VideoToolbox on
+  macOS and NVENC, Quick Sync, and AMF on other systems.
 - **SSAA: 2×2** renders at twice the output width and height, then averages four samples per pixel on the GPU.
   It works with video and PNG, including transparent exports.
 - **Transparent sky** exports straight alpha in PNG sequences and ProRes 4444. For a character cutout, hide terrain

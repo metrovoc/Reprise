@@ -109,7 +109,23 @@ public final class RepriseSteps {
                 case "play" -> s.setPlaying(true);
                 case "pause" -> s.setPlaying(false);
                 case "speed" -> s.setSpeed(Float.parseFloat(a[1]));
-                case "seek" -> s.seek(Integer.parseInt(a[1]));
+                case "seek" -> {
+                    int target = Math.clamp(Integer.parseInt(a[1]), 0, s.duration());
+                    long start = System.nanoTime();
+                    s.seek(target);
+                    if (s.tick() != target) {
+                        throw new IllegalStateException("Seek stopped at tick " + s.tick() + ", expected " + target);
+                    }
+                    LOG.info("[driver] sought to tick {} in {} ms", target, (System.nanoTime() - start) / 1_000_000);
+                }
+                case "block" -> {
+                    var pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                    var block = mc.level.getBlockState(pos).getBlock();
+                    var id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
+                    if (!id.toString().equals(a[4])) {
+                        throw new IllegalStateException("Expected " + a[4] + " at " + pos + ", found " + id);
+                    }
+                }
                 case "editor" -> mc.setScreen(new EditorScreen(s));
                 case "close" -> mc.setScreen(null);
                 case "keyframe" -> PlaybackControls.addKeyframe(s);
@@ -122,12 +138,17 @@ public final class RepriseSteps {
                 case "spectate" -> {
                     s.spectate(mc.level.getEntity(s.recorderId()));
                 }
+                case "range" -> {
+                    s.project().exportStart = Integer.parseInt(a[1]);
+                    s.project().exportEnd = Integer.parseInt(a[2]);
+                }
                 case "export" -> {
                     var settings = s.project().export;
                     settings.width = Integer.parseInt(a[1]);
                     settings.height = Integer.parseInt(a[2]);
                     settings.fps = Integer.parseInt(a[3]);
                     settings.format = com.metrovoc.reprise.editor.ExportSettings.Format.valueOf(a.length > 4 ? a[4] : "MP4_H264");
+                    settings.hardwareEncoder = java.util.Arrays.asList(a).contains("gpu");
                     settings.audio = java.util.Arrays.asList(a).contains("audio");
                     settings.supersample = java.util.Arrays.asList(a).contains("ssaa");
                     settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");

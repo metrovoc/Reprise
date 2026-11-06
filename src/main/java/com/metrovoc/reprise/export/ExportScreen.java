@@ -17,12 +17,16 @@ public final class ExportScreen extends Screen {
     private static final int[] FRAME_RATES = {24, 30, 60, 120};
     private static final int[] QUALITIES = {12, 16, 18, 23, 28};
 
+    private static final int[] BITRATES = {5, 10, 20, 35, 50, 80, 120};
+
     private final Screen parent;
     private final ReplaySession session;
     private final ExportSettings settings;
     private String error;
     private String ffmpeg;
     private Button alphaButton;
+    private Button encoderButton;
+    private Button qualityButton;
     private int frameCount;
     private boolean shaders;
 
@@ -44,6 +48,7 @@ public final class ExportScreen extends Screen {
         cycle(x, y, w, () -> Component.translatable("reprise.export.format", this.settings.format.label), () -> {
             ExportSettings.Format[] all = ExportSettings.Format.values();
             this.settings.format = all[(this.settings.format.ordinal() + 1) % all.length];
+            updateEncoder();
             updateAlpha();
         });
         cycle(x, y + 24, w, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + this.settings.height), () -> {
@@ -61,9 +66,20 @@ public final class ExportScreen extends Screen {
             this.settings.fps = next(FRAME_RATES, this.settings.fps);
             updateFrameCount();
         });
-        cycle(x, y + 96, w, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
+        cycle(x, y + 96, w / 2 - 2, () -> Component.translatable(this.settings.audio ? "reprise.export.audio.on" : "reprise.export.audio.off"),
             () -> this.settings.audio = !this.settings.audio);
-        cycle(x, y + 72, w / 2 - 2, () -> Component.translatable("reprise.export.quality", this.settings.quality), () -> this.settings.quality = next(QUALITIES, this.settings.quality));
+        this.qualityButton = cycle(x, y + 72, w / 2 - 2, this::qualityLabel, () -> {
+            if (hardware()) {
+                this.settings.bitrateMbps = next(BITRATES, this.settings.bitrateMbps);
+            } else {
+                this.settings.quality = next(QUALITIES, this.settings.quality);
+            }
+        });
+        this.encoderButton = cycle(x + w / 2 + 2, y + 96, w / 2 - 2, this::encoderLabel, () -> {
+            this.settings.hardwareEncoder = !this.settings.hardwareEncoder;
+            updateEncoder();
+        });
+        updateEncoder();
 
         cycle(x + w / 2 + 2, y + 72, w / 2 - 2,
             () -> Component.translatable(this.settings.supersample ? "reprise.export.ssaa.on" : "reprise.export.ssaa.off"),
@@ -83,6 +99,26 @@ public final class ExportScreen extends Screen {
     private void updateFrameCount() {
         var project = this.session.project();
         this.frameCount = project.frameTicks(project.start(), project.end(this.session.duration()), this.settings.fps).length;
+    }
+
+    private boolean hardware() {
+        return this.settings.supportsHardware() && this.settings.hardwareEncoder;
+    }
+
+    private Component encoderLabel() {
+        return Component.translatable(hardware() ? "reprise.export.encoder.gpu" : "reprise.export.encoder.cpu");
+    }
+
+    private Component qualityLabel() {
+        return hardware() ? Component.translatable("reprise.export.bitrate", this.settings.bitrateMbps)
+            : Component.translatable("reprise.export.quality", this.settings.quality);
+    }
+
+    private void updateEncoder() {
+        this.encoderButton.active = this.settings.supportsHardware();
+        this.encoderButton.setMessage(encoderLabel());
+        this.qualityButton.active = this.settings.supportsHardware() || this.settings.format == ExportSettings.Format.WEBM_VP9;
+        this.qualityButton.setMessage(qualityLabel());
     }
 
     private void updateAlpha() {

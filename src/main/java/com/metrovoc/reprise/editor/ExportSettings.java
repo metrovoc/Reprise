@@ -28,6 +28,13 @@ public final class ExportSettings {
     public boolean transparentSky;
     public boolean supersample;
 
+    public boolean hardwareEncoder;
+    public int bitrateMbps = 20;
+
+    public boolean supportsHardware() {
+        return format == Format.MP4_H264 || format == Format.MP4_H265;
+    }
+
     public boolean supportsAlpha() {
         return format == Format.PNG_SEQUENCE || format == Format.MOV_PRORES;
     }
