@@ -86,8 +86,9 @@ Undo restores both keys. The movement keys still fly the camera.
 
 Set the in-point with **[** and the out-point with **]**, then choose **Save replay clip** to create a
 standalone recording. The clip opens at the in-point and keeps markers within the selected range. Its
-opening snapshot includes packet history from the preceding checkpoint so it can restore the world
-and modded state. That history can include events from before the visible clip.
+opening snapshot includes packet history and tick boundaries from the preceding checkpoint so terrain
+lighting and modded state can be restored at the cut. That history can include events from before the visible
+clip. Clips that fold ticks into the opening snapshot use segment format 2 and require a reader that supports it.
 
 - **Keyframe** (`K`) saves the camera's position, angle, roll and field of view at the current moment. Drag a
   keyframe to move it in time, double-click it to jump there, right-click it to change how the camera travels on to

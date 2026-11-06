@@ -178,6 +178,11 @@ public final class RepriseSteps {
                         throw new IllegalStateException("Expected recorder at " + expected + ", found " + recorder);
                     }
                 }
+                case "skylight" -> {
+                    var pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                    int actual = mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, pos);
+                    if (actual != Integer.parseInt(a[4])) throw new IllegalStateException("Unexpected skylight " + actual + " at " + pos);
+                }
                 case "block" -> {
                     var pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
                     var block = mc.level.getBlockState(pos).getBlock();

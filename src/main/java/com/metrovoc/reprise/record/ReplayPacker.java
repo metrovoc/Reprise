@@ -86,6 +86,7 @@ public final class ReplayPacker {
                     int action = buf.get();
                     switch (action) {
                         case Actions.TICK -> ticks++;
+                        case Actions.SNAPSHOT_TICK -> { }
                         case Actions.SNAPSHOT_END -> actionsOffset = buf.position();
                         case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
                             int len = Varints.read(buf);

@@ -8,6 +8,8 @@ package com.metrovoc.reprise.format;
 public final class Actions {
     public static final int MAGIC = 0x52505253; // "RPRS"
     public static final int VERSION = 1;
+    /** Version 2 segments may retain tick boundaries inside a clip's opening snapshot. */
+    public static final int SNAPSHOT_TICK_VERSION = 2;
 
     /** Ends one recorded client tick. No payload. */
     public static final int TICK = 0;
@@ -19,6 +21,9 @@ public final class Actions {
     public static final int CHUNK_REF = 3;
     /** Marks the end of the segment's snapshot. No payload. */
     public static final int SNAPSHOT_END = 4;
+
+    /** End of a folded tick. Processes pending world updates without advancing the clip timeline. */
+    public static final int SNAPSHOT_TICK = 5;
 
     /** Chunk packets per chunk cache file. */
     public static final int CHUNKS_PER_FILE = 2048;

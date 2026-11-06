@@ -51,6 +51,8 @@ import net.minecraft.network.protocol.configuration.ClientConfigurationPacketLis
 import net.minecraft.network.protocol.configuration.ClientboundFinishConfigurationPacket;
 import net.minecraft.network.protocol.configuration.ConfigurationProtocols;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -439,9 +441,7 @@ public final class ReplaySession {
                 case Actions.TICK -> {
                     // Chunk lighting is normally applied between frames. During a seek, later
                     // block changes must see the light data already delivered for that terrain.
-                    if (this.fastForwarding && mc.level != null && (!mc.level.lightUpdateQueue.isEmpty() || mc.level.getLightEngine().hasLightWork())) {
-                        mc.level.update();
-                    }
+                    if (this.fastForwarding) processFoldedTick();
                     this.tick++;
                     applyResetsAtCurrentTick();
                     return;
@@ -480,6 +480,12 @@ public final class ReplaySession {
         this.segment = next;
     }
 
+    private void processFoldedTick() {
+        if (mc.level != null && (!mc.level.lightUpdateQueue.isEmpty() || mc.level.getLightEngine().hasLightWork())) {
+            mc.level.update();
+        }
+    }
+
     private byte[] readBytes() {
         int length = Varints.read(this.reader);
         byte[] bytes = new byte[length];
@@ -505,6 +511,7 @@ public final class ReplaySession {
                     t++;
                 }
                 case Actions.SNAPSHOT_END -> snapshot = false;
+                case Actions.SNAPSHOT_TICK -> { }
                 case Actions.GAME_PACKET, Actions.CONFIG_PACKET -> {
                     int length = Varints.read(buf);
                     byte[] bytes = new byte[length];
@@ -564,13 +571,18 @@ public final class ReplaySession {
                 resetListenerState();
                 for (var pack : snapshotPacks) handleEmbeddedPack(pack);
             }
+            boolean beforeFirstBoundary = true;
             while (buf.hasRemaining()) {
                 int action = buf.get();
                 if (action == Actions.SNAPSHOT_END) {
                     break;
                 }
                 switch (action) {
-                    case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
+                    case Actions.SNAPSHOT_TICK -> {
+                        processFoldedTick();
+                        beforeFirstBoundary = false;
+                    }
+                    case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()), -1, beforeFirstBoundary);
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
                     case Actions.CONFIG_PACKET -> readBytes();
                     default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");
@@ -661,7 +673,7 @@ public final class ReplaySession {
 
     private void deliverChunk(int index) {
         try {
-            deliverGame(this.file.chunkView(index), index);
+            deliverGame(this.file.chunkView(index), index, false);
         } catch (IOException e) {
             Reprise.LOGGER.warn("Missing cached chunk {}", index, e);
         }
@@ -671,9 +683,9 @@ public final class ReplaySession {
         skyLightCache.initialize(chunk, input, calculate);
     }
 
-    private void deliverGame(ByteBuffer bytes) { deliverGame(bytes, -1); }
+    private void deliverGame(ByteBuffer bytes) { deliverGame(bytes, -1, false); }
 
-    private void deliverGame(ByteBuffer bytes, int terrainIndex) {
+    private void deliverGame(ByteBuffer bytes, int terrainIndex, boolean untimedSnapshot) {
         ClientPacketListener listener = this.mc.getConnection();
         if (listener == null) {
             if (this.connection != null && this.connection.getPacketListener() instanceof ClientPacketListener pending) {
@@ -695,6 +707,13 @@ public final class ReplaySession {
         packet = this.filter.apply(packet);
         if (packet == null) {
             return;
+        }
+        if (untimedSnapshot && mc.level != null
+            && (packet instanceof ClientboundBlockUpdatePacket || packet instanceof ClientboundSectionBlocksUpdatePacket)) {
+            // Older clips only have packet order. Apply queued terrain light before the first
+            // block edit that depends on it, even when the original tick boundaries are absent.
+            while (!mc.level.lightUpdateQueue.isEmpty()) mc.level.pollLightUpdates();
+            if (mc.level.getLightEngine().hasLightWork()) mc.level.getLightEngine().runLightUpdates();
         }
         Vec3 cameraPos = null;
         float yRot = 0, xRot = 0;

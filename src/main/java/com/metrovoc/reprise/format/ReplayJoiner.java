@@ -105,12 +105,13 @@ public final class ReplayJoiner {
             zip.putNextEntry(new ZipEntry(name));
             var out = new DataOutputStream(new BufferedOutputStream(zip));
             out.writeInt(Actions.MAGIC);
-            out.writeInt(Actions.VERSION);
+            out.writeInt(buf.getInt(Integer.BYTES));
             while (buf.hasRemaining()) {
                 int action = buf.get();
                 out.writeByte(action);
                 switch (action) {
                     case Actions.TICK -> segment.ticks++;
+                    case Actions.SNAPSHOT_TICK -> { }
                     case Actions.SNAPSHOT_END -> segment.actionsOffset = out.size();
                     case Actions.CHUNK_REF -> {
                         int old = Varints.read(buf);

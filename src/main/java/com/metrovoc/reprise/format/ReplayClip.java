@@ -69,8 +69,8 @@ public final class ReplayClip {
         zip.putNextEntry(new ZipEntry(segment.file));
         var out = new DataOutputStream(new BufferedOutputStream(zip));
         out.writeInt(Actions.MAGIC);
-        out.writeInt(Actions.VERSION);
         ByteBuffer data = replay.segment(index);
+        out.writeInt(start > original.startTick ? Actions.SNAPSHOT_TICK_VERSION : data.getInt(Integer.BYTES));
         int tick = original.startTick;
         // Before the in-point, fold packet history into the snapshot in its original order. This also
         // preserves state from mod payloads whose effects Reprise cannot reconstruct independently.
@@ -83,8 +83,10 @@ public final class ReplayClip {
                         segment.actionsOffset = out.size();
                     }
                 }
+                case Actions.SNAPSHOT_TICK -> out.writeByte(action);
                 case Actions.TICK -> {
                     tick++;
+                    if (tick <= start) out.writeByte(Actions.SNAPSHOT_TICK);
                     if (tick == start) {
                         out.writeByte(Actions.SNAPSHOT_END);
                         segment.actionsOffset = out.size();

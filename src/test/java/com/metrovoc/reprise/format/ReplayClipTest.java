@@ -64,13 +64,36 @@ class ReplayClipTest {
             assertEquals(2, clip.meta().chunkCount);
             assertArrayEquals(new byte[]{11}, clip.chunk(0));
             assertArrayEquals(new byte[]{12}, clip.chunk(1));
-            assertArrayEquals(new byte[]{CHUNK_REF, 0, GAME_PACKET, 1, 42, SNAPSHOT_END, CHUNK_REF, 1, TICK}, bytes(clip.segment(0)));
+            assertArrayEquals(new byte[]{CHUNK_REF, 0, GAME_PACKET, 1, 42, SNAPSHOT_TICK, SNAPSHOT_END, CHUNK_REF, 1, TICK}, bytes(clip.segment(0)));
             assertArrayEquals(new byte[]{CHUNK_REF, 1, TICK}, bytes(clip.segmentActions(0)));
             assertTrue(clip.meta().segments.get(1).reset);
             assertEquals(0, clip.meta().segments.get(1).ticks);
             assertArrayEquals(new byte[]{CHUNK_REF, 1, SNAPSHOT_END}, bytes(clip.segment(1)));
         }
         assertArrayEquals(preserved, Files.readAllBytes(original));
+    }
+
+    @Test void foldedTicksSurviveReclippingAndJoiningWithoutExtendingPlayback() throws Exception {
+        Path original = source();
+        Path clip = ReplayClip.save(original, 1, 4);
+        Path nested = ReplayClip.save(clip, 1, 3);
+        try (var replay = new ReplayFile(nested)) {
+            assertEquals(2, replay.meta().durationTicks);
+            // The in-point lands on the second original checkpoint; its full snapshot supersedes the first.
+            assertEquals(VERSION, replay.segment(0).getInt(Integer.BYTES));
+        }
+        Path folded = ReplayClip.save(clip, 0, 1);
+        Path joined = ReplayJoiner.join(original, folded, "Joined");
+        try (var replay = new ReplayFile(joined)) {
+            int cut = replay.meta().segments.stream().filter(segment -> segment.startTick == 6)
+                .mapToInt(replay.meta().segments::indexOf).findFirst().orElseThrow();
+            assertEquals(7, replay.meta().durationTicks);
+            assertEquals(SNAPSHOT_TICK_VERSION, replay.segment(cut).getInt(Integer.BYTES));
+            assertArrayEquals(new byte[]{CHUNK_REF, 0, GAME_PACKET, 1, 42, SNAPSHOT_TICK, SNAPSHOT_END,
+                CHUNK_REF, 1, TICK}, bytes(replay.segment(cut)));
+            replay.meta().segments.get(cut).actionsOffset = 0;
+            assertArrayEquals(new byte[]{CHUNK_REF, 1, TICK}, bytes(replay.segmentActions(cut)));
+        }
     }
 
     @Test void startsExactlyAtResetAndEndsInsideSegment() throws Exception {
