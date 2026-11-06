@@ -80,6 +80,8 @@ public final class EditorScreen extends Screen {
         orbitPoint.active = this.minecraft.getCameraEntity() == this.minecraft.player;
         addRenderableWidget(Button.builder(Component.translatable("reprise.environment.title"), b ->
             this.minecraft.setScreen(new EnvironmentScreen(this, this.session))).bounds(170, 6, 94, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("reprise.editor.freeze"), b ->
+            minecraft.setScreen(new FreezeScreen(this, session))).bounds(218, 30, 82, 20).build());
         this.undoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.undo"), b -> restoreEdit(false))
             .bounds(6, 30, 60, 20).build());
         this.redoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.redo"), b -> restoreEdit(true))
@@ -163,8 +165,8 @@ public final class EditorScreen extends Screen {
     }
 
     private void saveClip() {
-        int start = project().start();
-        int end = project().end(this.session.duration());
+        int start = (int) Math.floor(project().worldTick(project().start()));
+        int end = (int) Math.ceil(project().worldTick(project().end(this.session.duration())));
         this.session.setPlaying(false);
         var source = this.session.file().path();
         var client = this.minecraft;
@@ -190,7 +192,7 @@ public final class EditorScreen extends Screen {
     private void updateLabels() {
         this.undoButton.active = project().canUndo();
         this.redoButton.active = project().canRedo();
-        this.saveClip.active = project().start() < project().end(this.session.duration());
+        this.saveClip.active = project().worldTick(project().start()) < project().worldTick(project().end(this.session.duration()));
         this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
@@ -312,13 +314,15 @@ public final class EditorScreen extends Screen {
         if (this.timeline.contains(mouseX, mouseY)) {
             double hover = this.timeline.tickAt(mouseX, this.session.duration());
             String tip = Component.translatable("reprise.editor.timeline_position", Timecode.precise(hover), Math.round(hover)).getString();
+            if (!project().freezes.isEmpty()) tip = Component.translatable("reprise.editor.shot_world_time",
+                Timecode.precise(hover), Timecode.precise(project().worldTick(hover))).getString();
             SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
             var marker = this.timeline.markerAt(this.session, mouseX);
             if (speed != null) {
                 tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed((float) speed.speed),
                     Component.translatable(speed.hold ? "reprise.interpolation.hold" : "reprise.interpolation.linear")).getString();
             } else if (marker != null) {
-                tip = Component.translatable("reprise.editor.marker.hover", marker.name.isEmpty() ? Timecode.precise(marker.tick) : marker.name).getString();
+                tip = Component.translatable("reprise.editor.marker.hover", marker.name.isEmpty() ? Timecode.precise(project().shotTick(marker.tick)) : marker.name).getString();
             }
             g.setTooltipForNextFrame(Component.literal(tip), mouseX, mouseY);
         }
@@ -368,7 +372,7 @@ public final class EditorScreen extends Screen {
         if (hit == null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             var marker = this.timeline.markerAt(this.session, event.x());
             if (marker != null && doubleClick) {
-                this.session.seek(marker.tick);
+                this.session.seek((int) project().shotTick(marker.tick));
                 return true;
             }
         }

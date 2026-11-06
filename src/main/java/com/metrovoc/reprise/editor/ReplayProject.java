@@ -36,6 +36,36 @@ public final class ReplayProject {
         save();
     }
 
+    /** A shot interval in which the camera clock advances while the recording stays at worldTick. */
+    public record Freeze(double worldTick, int length) {}
+    public List<Freeze> freezes = new ArrayList<>();
+
+    public int addedTicks() {
+        int extra = 0;
+        for (var freeze : freezes) extra = Math.addExact(extra, freeze.length);
+        return extra;
+    }
+
+    public double worldTick(double shotTick) {
+        int extra = 0;
+        for (var freeze : freezes) {
+            double start = freeze.worldTick + extra;
+            if (shotTick < start) break;
+            if (shotTick <= start + freeze.length) return freeze.worldTick;
+            extra += freeze.length;
+        }
+        return shotTick - extra;
+    }
+
+    public double shotTick(double worldTick) {
+        double shot = worldTick;
+        for (var freeze : freezes) {
+            if (worldTick <= freeze.worldTick) break;
+            shot += freeze.length;
+        }
+        return shot;
+    }
+
     public List<Keyframe> keyframes = new ArrayList<>();
     public List<SpeedKey> speedKeys = new ArrayList<>();
     /** The part of the replay to export, in ticks; -1 for the whole replay. */
@@ -158,6 +188,7 @@ public final class ReplayProject {
         this.environment = state.environment;
         this.hideNames = state.hideNames;
         this.entityOverrides = state.entityOverrides;
+        this.freezes = state.freezes;
         this.keyframes = state.keyframes;
         this.speedKeys = state.speedKeys == null ? new ArrayList<>() : state.speedKeys;
         this.exportStart = state.exportStart;
@@ -165,6 +196,21 @@ public final class ReplayProject {
         this.export = state.export;
         save();
         return true;
+    }
+
+    public void insertFreeze(int shotTick, int length) {
+        if (length <= 0) throw new IllegalArgumentException("A freeze needs a positive length");
+        checkpoint();
+        double world = worldTick(shotTick);
+        var updated = new ArrayList<>(freezes);
+        updated.add(new Freeze(world, length));
+        updated.sort(Comparator.comparingDouble(Freeze::worldTick));
+        freezes = updated;
+        for (var key : keyframes) if (key.tick > shotTick) key.tick += length;
+        for (var key : speedKeys) if (key.tick > shotTick) key.tick += length;
+        if (exportStart > shotTick) exportStart += length;
+        if (exportEnd >= shotTick) exportEnd += length;
+        save();
     }
 
     public void putCameraKey(Keyframe key) {

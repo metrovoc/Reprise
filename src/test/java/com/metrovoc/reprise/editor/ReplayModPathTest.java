@@ -59,10 +59,37 @@ class ReplayModPathTest {
         assertEquals(10, PathInterpolator.evaluate(path.keys, 27.5).x());
     }
 
-    @Test void aFreezeCannotSilentlyCollapseCameraMovementIntoOneReplayTick() {
+    @Test void cameraAdvancesWhileTheRecordingStaysAtTheFreezeTick() {
         var tracks = shot();
         tracks.get(0).getAsJsonObject().getAsJsonArray("keyframes").get(1)
             .getAsJsonObject().getAsJsonObject("properties").addProperty("timestamp", 500);
-        assertThrows(IllegalArgumentException.class, () -> new ReplayModPath(tracks, 40, INITIAL));
+        var path = new ReplayModPath(tracks, 40, INITIAL);
+        var project = new ReplayProject();
+        project.freezes = path.freezes;
+        var clock = new FrameSchedule(path.speeds, path.start, path.end, 100);
+        for (int frame = 0; frame <= 25; frame++) {
+            double shot = clock.tickAt(frame);
+            assertEquals(10, project.worldTick(shot), 1e-10);
+            assertEquals(10 + frame / 5.0, shot, 1e-10);
+        }
+        assertTrue(PathInterpolator.evaluate(path.keys, clock.tickAt(25)).x() > 0);
+        assertEquals(27.5, project.worldTick(clock.tickAt(100)), 1e-10);
     }
+    @Test void adjacentFractionalHoldsAtTheEndKeepTheirVideoLengths() {
+        var tracks = shot();
+        var times = tracks.get(0).getAsJsonObject().getAsJsonArray("keyframes");
+        for (var value : times) value.getAsJsonObject().getAsJsonObject("properties").addProperty("timestamp", 2000);
+        times.get(1).getAsJsonObject().addProperty("time", 267);
+        var path = new ReplayModPath(tracks, 40, INITIAL);
+        var project = new ReplayProject();
+        project.freezes = path.freezes;
+        var schedule = new FrameSchedule(path.speeds, path.start, path.end, 1000);
+        assertEquals(1001, schedule.frameCount());
+        assertEquals(21, project.addedTicks());
+        for (int frame = 0; frame <= 1000; frame++) {
+            assertEquals(40, project.worldTick(schedule.tickAt(frame)), 1e-12);
+        }
+        assertEquals(10, PathInterpolator.evaluate(path.keys, schedule.tickAt(1000)).x(), 1e-10);
+    }
+
 }

@@ -5,6 +5,7 @@ import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.editor.EnvironmentSettings.Layer;
+import com.metrovoc.reprise.editor.ReplayProject;
 import com.metrovoc.reprise.format.Actions;
 import com.metrovoc.reprise.format.EmbeddedPacks;
 import com.metrovoc.reprise.format.ReplayFile;
@@ -109,6 +110,9 @@ public final class ReplaySession {
     private ByteBuffer reader;
     /** Recorded ticks applied so far: the replay's current time. */
     private int tick;
+    private int shotOffset;
+    private List<ReplayProject.Freeze> currentFreezes;
+
     private boolean playing;
     private float speed = 1;
     private boolean fastForwarding;
@@ -121,8 +125,8 @@ public final class ReplaySession {
     private final List<ClientboundResourcePackPushPacket> snapshotPacks = new ArrayList<>();
     private int failedPackets;
     private UUID spectating;
-    private final com.metrovoc.reprise.editor.ReplayProject project;
-    private com.metrovoc.reprise.editor.ReplayProject queuedProject;
+    private final ReplayProject project;
+    private ReplayProject queuedProject;
 
     private ReplaySession(ReplayFile file, Screen exitScreen) {
         this.file = file;
@@ -130,21 +134,24 @@ public final class ReplaySession {
         this.exitScreen = exitScreen;
         this.connectionType = this.meta.neoforgeConnection ? ConnectionType.NEOFORGE : ConnectionType.OTHER;
         this.cameraProfile = new GameProfile(UUID.randomUUID(), this.mc.getUser().getName());
-        this.project = com.metrovoc.reprise.editor.ReplayProject.load(this.meta);
+        this.project = ReplayProject.load(this.meta);
     }
 
-    public com.metrovoc.reprise.editor.ReplayProject project() {
+    public ReplayProject project() {
         return this.queuedProject != null ? this.queuedProject : this.project;
     }
 
-    public void setQueuedProject(com.metrovoc.reprise.editor.ReplayProject value) {
+    public void setQueuedProject(ReplayProject value) {
         this.queuedProject = value;
         refreshEnvironment();
     }
 
     /** The replay time shown on screen, in ticks, with the fraction the renderer is between ticks. */
     public double visualTick(float partialTick) {
-        return this.playing ? Math.max(0, this.tick - 1 + partialTick) : this.tick;
+        if (this.playing && !project().freezes.isEmpty()) {
+            partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        }
+        return this.playing ? Math.max(0, tick() - 1 + partialTick) : tick();
     }
 
     public static ReplaySession active() {
@@ -179,11 +186,12 @@ public final class ReplaySession {
             if (active.meta.openingTick > 0) {
                 active.fastForwarding = true;
                 try {
-                    active.advance(Math.min(active.meta.openingTick, active.duration()));
+                    active.advance(Math.min(active.meta.openingTick, active.meta.durationTicks));
                 } finally {
                     active.fastForwarding = false;
                 }
             }
+            active.currentFreezes = null;
             active.settleEntities();
         } catch (Exception e) {
             Reprise.LOGGER.error("Could not open replay {}", path, e);
@@ -239,11 +247,39 @@ public final class ReplaySession {
     }
 
     public int tick() {
-        return this.tick;
+        // Changing shots, undoing an import, or loading a project keeps the current world instant.
+        if (currentFreezes != project().freezes) {
+            if (!project().freezes.equals(currentFreezes)) shotOffset = (int) project().shotTick(tick) - tick;
+            currentFreezes = project().freezes;
+        }
+        return this.tick + shotOffset;
     }
 
+    public int recordedTick() { return this.tick; }
+
     public int duration() {
-        return this.meta.durationTicks;
+        return Math.addExact(meta.durationTicks, project().addedTicks());
+    }
+
+    /** Export can render multiple camera poses at one world instant without ticking the client simulation. */
+    public void skipFrozenTicks(int target) {
+        if (project().freezes.isEmpty()) return;
+        int from = tick();
+        if (target <= from || Math.ceil(project().worldTick(from + 1)) != tick) return;
+        int low = from + 1, high = target;
+        while (low < high) {
+            int mid = low + (high - low + 1) / 2;
+            if (Math.ceil(project().worldTick(mid)) == tick) low = mid;
+            else high = mid - 1;
+        }
+        shotOffset = low - tick;
+    }
+
+    /** Render fraction for the recorded world. The camera still uses the shot clock during a freeze. */
+    public float worldPartial(float shotPartial) {
+        if (!playing) return 1;
+        double world = project().worldTick(Math.max(0, tick() - 1 + shotPartial));
+        return (float) Math.clamp(world - tick + 1, 0, 1);
     }
 
     public static boolean hides(Layer layer) {
@@ -255,7 +291,7 @@ public final class ReplaySession {
     }
 
     public void setPlaying(boolean playing) {
-        this.playing = playing && this.tick < duration();
+        this.playing = playing && tick() < duration();
     }
 
     public float speed() {
@@ -321,14 +357,19 @@ public final class ReplaySession {
         if (this.mc.level == null) {
             return;
         }
-        this.mc.level.tickRateManager().setFrozen(!this.playing);
+        boolean advanceWorld = false;
         if (this.playing) {
-            if (this.tick >= duration()) {
+            if (tick() >= duration()) {
                 this.playing = false;
             } else {
-                advance(1);
+                int next = tick() + 1;
+                int recorded = (int) Math.ceil(project().worldTick(next));
+                advanceWorld = recorded > this.tick;
+                if (advanceWorld) advance(recorded - this.tick);
+                shotOffset = next - this.tick;
             }
         }
+        this.mc.level.tickRateManager().setFrozen(!advanceWorld);
         if (!this.cameraPlaced && this.mc.player != null) {
             placeCameraAtRecorder();
         }
@@ -348,14 +389,18 @@ public final class ReplaySession {
     public float millisPerTick() {
         // The path preview plays as the export will: at the speed keys' speed.
         if (CameraPath.preview() && !project().speedKeys.isEmpty()) {
-            return project().previewMillisPerTick(this.tick, duration());
+            return project().previewMillisPerTick(tick(), duration());
         }
         return (float) (50.0 / Math.max(0.01, this.speed));
     }
 
-    /** Moves to {@code target} (in recorded ticks), keeping the camera where it is. */
+    /** Moves to {@code target} on the shot timeline, keeping the camera where it is. */
     public void seek(int target) {
         target = Math.max(0, Math.min(duration(), target));
+        currentFreezes = project().freezes;
+        int shotTarget = target;
+        target = (int) Math.ceil(project().worldTick(target));
+        shotOffset = shotTarget - target;
         if (target == this.tick) {
             return;
         }
@@ -420,7 +465,7 @@ public final class ReplaySession {
 
     /** Applies {@code ticks} recorded ticks. */
     private void advance(int ticks) {
-        for (int i = 0; i < ticks && this.tick < duration(); i++) {
+        for (int i = 0; i < ticks && this.tick < meta.durationTicks; i++) {
             readUntilTick();
         }
     }
@@ -429,7 +474,7 @@ public final class ReplaySession {
         while (true) {
             if (this.reader == null || !this.reader.hasRemaining()) {
                 if (this.segment + 1 >= this.meta.segments.size()) {
-                    this.tick = duration();
+                    this.tick = meta.durationTicks;
                     this.playing = false;
                     return;
                 }

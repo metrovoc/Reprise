@@ -59,7 +59,7 @@ final class ReplayModPathsScreen extends Screen {
             float roll = current == null ? com.metrovoc.reprise.playback.CameraController.roll() : current.roll();
             var initial = new CameraPose(entity.getX(), entity.getY(), entity.getZ(), camera.yRot(), camera.xRot(),
                 roll, minecraft.options.fov().get());
-            path = new ReplayModPath(paths.getAsJsonArray(name), session.duration(), initial);
+            path = new ReplayModPath(paths.getAsJsonArray(name), session.meta().durationTicks, initial);
         } catch (RuntimeException e) {
             minecraft.setScreen(new AlertScreen(() -> minecraft.setScreen(this),
                 Component.translatable("reprise.editor.path_failed"), Component.literal(String.valueOf(e.getMessage()))));
@@ -67,6 +67,7 @@ final class ReplayModPathsScreen extends Screen {
         }
         var project = session.project();
         project.checkpoint();
+        project.freezes = path.freezes;
         project.keyframes = path.keys;
         project.speedKeys = path.speeds;
         project.exportStart = path.start;

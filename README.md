@@ -50,13 +50,15 @@ opens when the recording player and terrain first appear. Backward seeks rebuild
 connection configuration and includes embedded server resource packs.
 
 If the recording contains a ReplayMod path library, open **Editor → ReplayMod paths…** and select the autosave
-or a named shot. Loading it replaces the camera keys, speed keys, and export range in one undoable edit.
+or a named shot. Loading it replaces the camera keys, speed keys, world freezes, and export range in one undoable edit.
 Linear, cubic spline, and Catmull–Rom segments retain their position, rotation, roll, and timing. Reprise
 adds a camera key where a time-speed change splits a segment and uses your current FOV. Import supports
-free-camera and entity spectator segments whose time track advances throughout and covers the camera movement.
-Spectator segments show the recorded entity’s viewpoint during preview and export. Select a spectator key and click **Spectate** to change its outgoing segment to a linear camera move. If the camera starts
-later, the shot holds your viewpoint at import until the first camera key. After the last camera key, the
-world continues playing from that viewpoint. The export range rounds outward to whole replay ticks.
+free-camera and entity spectator segments with a forward or stationary replay clock. During a freeze
+the camera continues along the shot while the recorded world stays at the held timestamp. Camera movement
+before or after the time track uses the nearest time key. Spectator segments show the recorded entity’s
+viewpoint during preview and export. Select a spectator key and click **Spectate** to turn its outgoing
+segment into a linear camera move. If the camera starts late, the shot holds your incoming viewpoint
+until the first camera key. The export range rounds outward to whole timeline ticks.
 
 ## Watching
 
@@ -117,6 +119,9 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
 - **Speed** keys make slow motion and timelapses: set a speed with `−`/`+`, press *Speed*, and from that moment the
   preview and the export run at that speed. Double-click a speed key to switch between a linear ramp and holding that speed
   until the next key. Right-click a speed key to remove it.
+- **Freeze world…** inserts time at the playhead for a camera move over a stationary world. Enter the length
+  in timeline ticks (20 is one second at 1×). Later camera and speed keys shift together. The shaded interval
+  can contain camera keys, and **Undo** removes the insertion. **Save replay clip** uses the underlying recording range.
 - **Entities** lists players and mobs at the current replay time. Search by name or UUID, then select a row to
   spectate, hide, or outline that entity. Enter a six-digit hex color to change its outline, or set a custom name tag. These edits
   are saved with the project and apply to video exports. Hiding a spectated player also hides their first-person hands.

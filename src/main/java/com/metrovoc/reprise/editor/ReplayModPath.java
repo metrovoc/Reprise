@@ -25,6 +25,7 @@ final class ReplayModPath {
 
     final List<Keyframe> keys = new ArrayList<>();
     final List<SpeedKey> speeds = new ArrayList<>();
+    final List<ReplayProject.Freeze> freezes = new ArrayList<>();
     final int start, end;
 
     ReplayModPath(JsonArray tracks, int duration, CameraPose initial) {
@@ -37,20 +38,6 @@ final class ReplayModPath {
             clock.add(new Clock(key.get("time").getAsLong(), key.getAsJsonObject("properties").get("timestamp").getAsInt()));
         }
         require(clock.size() >= 2, "This path needs at least two time keys.");
-        for (int i = 1; i < clock.size(); i++) {
-            var a = clock.get(i - 1);
-            var b = clock.get(i);
-            require(b.time > a.time && b.replay > a.replay, "Frozen or reversed time segments cannot be imported.");
-            require(type(interpolator(timing, i - 1), "timestamp").getAsString().equals("linear"), "Unsupported time interpolation.");
-            var speed = new SpeedKey(a.replay / 50, (b.replay - a.replay) / (b.time - a.time));
-            require(speed.speed >= 0.001, "Time segment is below the minimum replay speed.");
-            speed.hold = true;
-            speeds.add(speed);
-        }
-        require(clock.getFirst().replay >= 0 && clock.getLast().replay <= duration * 50.0, "Time track extends beyond this recording.");
-        start = (int) Math.floor(clock.getFirst().replay / 50);
-        end = (int) Math.ceil(clock.getLast().replay / 50);
-
         var camera = tracks.get(1).getAsJsonObject();
         var poses = new ArrayList<Pose>();
         for (var entry : camera.getAsJsonArray("keyframes")) {
@@ -76,8 +63,37 @@ final class ReplayModPath {
             poses.add(pose);
         }
         require(poses.size() >= 2, "This path needs at least two camera keys.");
-        require(poses.getFirst().time >= clock.getFirst().time && poses.getLast().time <= clock.getLast().time,
-            "Camera movement outside the time track requires a frozen replay clock.");
+        // Camera motion beyond the timestamp track holds the nearest recorded instant.
+        double firstTime = clock.getFirst().time, lastTime = clock.getLast().time;
+        for (int i = 1; i < clock.size(); i++) {
+            require(type(interpolator(timing, i - 1), "timestamp").getAsString().equals("linear"), "Unsupported time interpolation.");
+        }
+        if (poses.getFirst().time < firstTime) clock.addFirst(new Clock(poses.getFirst().time, clock.getFirst().replay));
+        if (poses.getLast().time > lastTime) clock.add(new Clock(poses.getLast().time, clock.getLast().replay));
+        require(clock.getFirst().replay >= 0 && clock.getLast().replay <= duration * 50.0, "Time track extends beyond this recording.");
+        int extra = 0;
+        for (int i = 1; i < clock.size(); i++) {
+            var a = clock.get(i - 1);
+            var b = clock.get(i);
+            double from = a.replay / 50;
+            double worldEnd = b.replay / 50;
+            double shotEndMs = b.replay + extra * 50.0;
+            require(b.time > a.time && shotEndMs >= a.replay, "Reversed time segments cannot be imported.");
+            if (shotEndMs == a.replay) {
+                int length = Math.toIntExact((long) Math.ceil((b.time - a.time) / 50));
+                extra = Math.addExact(extra, length);
+                freezes.add(new ReplayProject.Freeze(worldEnd, length));
+                shotEndMs += length * 50.0;
+            }
+            require(duration + (long) extra <= Integer.MAX_VALUE, "Camera timeline is too long.");
+            var speed = new SpeedKey(from, (shotEndMs - a.replay) / (b.time - a.time));
+            require(speed.speed >= 0.001, "Time segment is below the minimum replay speed.");
+            speed.hold = true;
+            speeds.add(speed);
+            clock.set(i, new Clock(b.time, shotEndMs));
+        }
+        start = (int) Math.floor(clock.getFirst().replay / 50);
+        end = (int) Math.ceil(clock.getLast().replay / 50);
         if (poses.getFirst().time > clock.getFirst().time) {
             // ReplayMod does not move the camera until its first position key.
             var lead = key(clock.getFirst().replay / 50, new double[]{initial.x(), initial.y(), initial.z(),

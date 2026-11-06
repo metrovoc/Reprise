@@ -43,11 +43,11 @@ final class EnvironmentScreen extends Screen {
             settings().fixedTime = value();
             settings().clock = Clock.FIXED;
         }));
-        addKey = button("add_key", x + 186, y + 35, 90, () -> edit(() -> settings().key(session.tick(), value())));
+        addKey = button("add_key", x + 186, y + 35, 90, () -> edit(() -> settings().key(session.recordedTick(), value())));
         recorded = button("recorded_time", x, y + 58, 90, () -> edit(() -> settings().clock = Clock.RECORDED));
         keys = button("use_keys", x + 93, y + 58, 90, () -> edit(() -> settings().clock = Clock.KEYFRAMED));
         removeKey = button("remove_key", x + 186, y + 58, 90, () -> edit(() -> {
-            settings().keys.removeIf(k -> k.tick() == session.tick());
+            settings().keys.removeIf(k -> k.tick() == session.recordedTick());
             if (settings().keys.isEmpty() && settings().clock == Clock.KEYFRAMED) {
                 settings().clock = Clock.RECORDED;
             }
@@ -91,17 +91,17 @@ final class EnvironmentScreen extends Screen {
     }
 
     private void jump(int direction) {
-        int tick = session.tick();
+        int tick = session.recordedTick();
         var candidates = settings().keys.stream().mapToInt(EnvironmentSettings.TimeKey::tick);
         int target = direction < 0 ? candidates.filter(t -> t < tick).max().orElse(tick)
             : candidates.filter(t -> t > tick).min().orElse(tick);
-        session.seek(target);
+        session.seek((int) session.project().shotTick(target));
         readClock();
         update();
     }
 
     private void update() {
-        int value = value(), tick = session.tick();
+        int value = value(), tick = session.recordedTick();
         boolean valid = value >= 0 && value < EnvironmentSettings.DAY;
         fixed.active = valid && (settings().clock != Clock.FIXED || value != settings().fixedTime);
         recorded.active = settings().clock != Clock.RECORDED;
@@ -120,7 +120,7 @@ final class EnvironmentScreen extends Screen {
         super.extractRenderState(g, mouseX, mouseY, partial);
         g.centeredText(font, title, width / 2, y + 4, 0xFFFFFFFF);
         g.text(font, Component.translatable("reprise.environment.time"), x, y + 22, 0xFFFFFFFF);
-        g.centeredText(font, Timecode.precise(session.tick()), width / 2, y + 87, 0xFFFFFFFF);
+        g.centeredText(font, Timecode.precise(session.recordedTick()), width / 2, y + 87, 0xFFFFFFFF);
         g.text(font, Component.translatable("reprise.environment.weather"), x, y + 107, 0xFFFFFFFF);
     }
 

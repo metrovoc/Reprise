@@ -16,6 +16,14 @@ public abstract class DeltaTrackerTimerMixin {
     @Shadow private float pausedDeltaTickResidual;
     @Shadow private long lastMs;
 
+    @Inject(method = "getGameTimeDeltaPartialTick", at = @At("HEAD"), cancellable = true)
+    private void reprise$worldFraction(boolean ignoreFrozenGame, CallbackInfoReturnable<Float> cir) {
+        var session = com.metrovoc.reprise.playback.ReplaySession.active();
+        if (!ignoreFrozenGame && session != null && session.isPlaying() && !session.project().freezes.isEmpty()) {
+            cir.setReturnValue(session.worldPartial(this.deltaTickResidual));
+        }
+    }
+
     @Inject(method = "advanceGameTime", at = @At("HEAD"), cancellable = true)
     private void reprise$exportClock(long currentMs, CallbackInfoReturnable<Integer> cir) {
         VideoExporter exporter = VideoExporter.running();

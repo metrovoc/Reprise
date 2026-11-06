@@ -93,6 +93,14 @@ public final class Timeline {
             int rs = Math.max(this.x, xOf(project.start(), duration)), re = Math.min(this.x + this.width, xOf(project.end(duration), duration));
             if (rs < re) g.fill(rs, trackTop, re, trackBottom, RANGE);
         }
+        int addedTicks = 0;
+        for (var freeze : project.freezes) {
+            double start = freeze.worldTick() + addedTicks;
+            int left = Math.max(this.x, xOf(start, duration));
+            int right = Math.min(this.x + this.width, xOf(start + freeze.length(), duration));
+            if (left < right) g.fill(left, trackTop, right, trackBottom, 0x88879DAD);
+            addedTicks += freeze.length();
+        }
         // Progress
         int px = xOf(tick, duration);
         g.fill(this.x, trackBottom - 2, Math.clamp(px, this.x, this.x + this.width), trackBottom, 0xFF5B8CFF);
@@ -114,8 +122,8 @@ public final class Timeline {
             }
         }
         for (ReplayMeta.Marker marker : session.meta().markers) {
-            if (!visible(marker.tick, duration)) continue;
-            int mx = xOf(marker.tick, duration);
+            if (!visible(session.project().shotTick(marker.tick), duration)) continue;
+            int mx = xOf(session.project().shotTick(marker.tick), duration);
             g.fill(mx, trackTop, mx + 1, trackBottom, 0xFF000000 | marker.color);
         }
         int mid = (trackTop + trackBottom) / 2;
@@ -126,8 +134,9 @@ public final class Timeline {
             diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
         }
         for (var key : project.environment.keys) {
-            if (!visible(key.tick(), duration)) continue;
-            int tx = xOf(key.tick(), duration);
+            double shot = project.shotTick(key.tick());
+            if (!visible(shot, duration)) continue;
+            int tx = xOf(shot, duration);
             int color = project.environment.clock == com.metrovoc.reprise.editor.EnvironmentSettings.Clock.KEYFRAMED ? 0xFFFFAA66 : 0xFF90745F;
             g.fill(tx - 2, trackTop, tx + 3, trackTop + 2, color);
         }
@@ -170,8 +179,8 @@ public final class Timeline {
     public ReplayMeta.Marker markerAt(ReplaySession session, double mx) {
         int duration = Math.max(1, session.duration());
         for (ReplayMeta.Marker marker : session.meta().markers) {
-            if (!visible(marker.tick, duration)) continue;
-            if (Math.abs(xOf(marker.tick, duration) - mx) <= 2) {
+            if (!visible(session.project().shotTick(marker.tick), duration)) continue;
+            if (Math.abs(xOf(session.project().shotTick(marker.tick), duration) - mx) <= 2) {
                 return marker;
             }
         }

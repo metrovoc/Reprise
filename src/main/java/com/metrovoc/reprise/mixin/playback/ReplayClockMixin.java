@@ -16,7 +16,7 @@ public abstract class ReplayClockMixin {
     private float reprise$clockFraction(float recorded, Holder<WorldClock> clock) {
         var session = ReplaySession.active();
         if (session != null && clock.is(WorldClocks.OVERWORLD)) {
-            double override = session.project().environment.timeAt(session.tick());
+            double override = session.project().environment.timeAt(session.recordedTick());
             if (override >= 0) {
                 return (float) (override - Math.floor(override));
             }
@@ -28,7 +28,7 @@ public abstract class ReplayClockMixin {
     private long reprise$daylight(long recorded, Holder<WorldClock> clock) {
         ReplaySession session = ReplaySession.active();
         if (session != null && clock.is(WorldClocks.OVERWORLD)) {
-            double override = session.project().environment.timeAt(session.tick());
+            double override = session.project().environment.timeAt(session.recordedTick());
             if (override >= 0) {
                 return recorded - Math.floorMod(recorded, EnvironmentSettings.DAY) + (long) override;
             }

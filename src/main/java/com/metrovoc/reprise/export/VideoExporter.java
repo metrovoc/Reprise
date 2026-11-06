@@ -234,7 +234,7 @@ public final class VideoExporter {
 
     public float shaderTimeSeconds() {
         double tick = this.schedule.tickAt(Math.min(this.frame, this.totalFrames - 1));
-        return (float) ((tick / 20.0) % 3600.0);
+        return (float) ((session.project().worldTick(tick) / 20.0) % 3600.0);
     }
 
     public float frameDurationSeconds() {
@@ -296,6 +296,7 @@ public final class VideoExporter {
         }
         double target = this.schedule.tickAt(this.frame);
         int needTick = target >= this.session.duration() ? this.session.duration() : (int) target + 1;
+        this.session.skipFrozenTicks(needTick);
         int ticks = Math.max(0, needTick - this.session.tick());
         partial[0] = (float) (target - needTick + 1);
         this.neededTick = needTick;
