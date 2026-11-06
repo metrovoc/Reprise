@@ -2,10 +2,12 @@ package com.metrovoc.reprise.format;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.metrovoc.reprise.record.PacketCodecs;
 import com.metrovoc.reprise.util.Varints;
 import io.netty.buffer.Unpooled;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -16,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -24,6 +27,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.PacketType;
+import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.CommonPacketTypes;
 import net.minecraft.network.protocol.configuration.ConfigurationPacketTypes;
 import net.minecraft.network.protocol.configuration.ConfigurationProtocols;
@@ -87,7 +91,12 @@ public final class ReplayModImport {
                     meta.markers.add(marker);
                 }
             }
+            Map<String, String> packs = new HashMap<>();
+            var packIndex = zip.getEntry("resourcepack/index.json");
+            if (packIndex != null) json(zip, packIndex).getAsJsonObject().entrySet().forEach(entry ->
+                packs.put("replay://" + entry.getKey(), entry.getValue().getAsString()));
             return ReplayOutput.write(destination, meta, out -> {
+                for (String hash : new HashSet<>(packs.values())) EmbeddedPacks.copy(zip, out, hash);
                 var segment = new ReplayMeta.Segment(Actions.segmentFile(0), 0, true);
                 // MCPR interleaves terrain and game packets. Stream terrain straight into chunk-cache
                 // entries while spooling the smaller timeline separately, then append it to the ZIP.
@@ -95,7 +104,7 @@ public final class ReplayModImport {
                 try {
                     try (var in = new DataInputStream(new BufferedInputStream(zip.getInputStream(packets)));
                          var data = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(timeline)))) {
-                        readPackets(in, packets.getSize(), data, out, meta, segment, duration);
+                        readPackets(in, packets.getSize(), data, out, meta, segment, duration, packs);
                     }
                     out.putNextEntry(new ZipEntry(segment.file));
                     Files.copy(timeline, out);
@@ -110,7 +119,7 @@ public final class ReplayModImport {
     }
 
     private static void readPackets(DataInputStream in, long remaining, DataOutputStream out, ZipOutputStream zip, ReplayMeta meta,
-                                    ReplayMeta.Segment segment, int duration) throws IOException {
+                                    ReplayMeta.Segment segment, int duration, Map<String, String> packs) throws IOException {
         Map<PacketType<?>, Integer> loginIds = new HashMap<>(), configIds = new HashMap<>(), ids = new HashMap<>();
         LoginProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(loginIds::put);
         ConfigurationProtocols.CLIENTBOUND_TEMPLATE.details().listPackets(configIds::put);
@@ -152,8 +161,19 @@ public final class ReplayModImport {
             }
             // ReplayMod rewrites pack URLs to its own archive-local scheme.
             var phaseIds = phase == Phase.PLAY ? ids : configIds;
-            if (id == phaseIds.get(CommonPacketTypes.CLIENTBOUND_RESOURCE_PACK_PUSH)
-                || id == phaseIds.get(CommonPacketTypes.CLIENTBOUND_RESOURCE_PACK_POP)) continue;
+            if (id == phaseIds.get(CommonPacketTypes.CLIENTBOUND_RESOURCE_PACK_PUSH)) {
+                var packet = PacketCodecs.decode(ClientboundResourcePackPushPacket.STREAM_CODEC, body);
+                String hash = packs.get(packet.url());
+                if (hash == null) continue; // ReplayMod omits the index entry for a declined or failed pack.
+                var local = new ClientboundResourcePackPushPacket(packet.id(), EmbeddedPacks.URL_PREFIX + hash,
+                    hash, packet.required(), packet.prompt());
+                byte[] payload = PacketCodecs.encode(ClientboundResourcePackPushPacket.STREAM_CODEC, local);
+                var framed = new ByteArrayOutputStream();
+                Varints.write(new DataOutputStream(framed), id);
+                framed.write(payload);
+                bytes = framed.toByteArray();
+                size = bytes.length;
+            }
             if (phase == Phase.PLAY) {
                 if (id == ids.get(GamePacketTypes.CLIENTBOUND_START_CONFIGURATION)) {
                     throw new IOException("Recording switches configuration during play at " + time + " ms");

@@ -31,8 +31,6 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.ClientboundResourcePackPopPacket;
-import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.ClientboundUpdateTagsPacket;
 import net.minecraft.network.protocol.configuration.ClientboundRegistryDataPacket;
 import net.minecraft.network.protocol.configuration.ClientboundUpdateEnabledFeaturesPacket;
@@ -148,11 +146,7 @@ final class SnapshotBuilder {
             }
         });
         recorder.writeConfig(new ClientboundUpdateTagsPacket(tags));
-        recorder.writeConfig(new ClientboundResourcePackPopPacket(Optional.empty()));
-        for (var pack : mc.getDownloadedPackSource().manager.packs) {
-            recorder.writeConfig(new ClientboundResourcePackPushPacket(pack.id, pack.url.toString(),
-                pack.hash == null ? "" : pack.hash.toString(), false, Optional.empty()));
-        }
+        recorder.recordPacks(true);
     }
 
     private static ClientboundPlayerInfoUpdatePacket playerInfo(ClientPacketListener connection, ClientLevel level) {

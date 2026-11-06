@@ -83,6 +83,25 @@ public final class RepriseSteps {
             throw new IllegalStateException("No field named " + parts[0]);
         });
         Driver.STEPS.put("drop", (mc, name) -> mc.screen.onFilesDrop(java.util.List.of(mc.gameDirectory.toPath().resolve(name))));
+        Driver.STEPS.put("local_pack", (mc, arg) -> {
+            var parts = arg.split(" ", 2);
+            var id = java.util.UUID.fromString(parts[0]);
+            var source = mc.getDownloadedPackSource();
+            if (parts[1].equals("remove")) source.popPack(id);
+            else {
+                source.allowServerPacks();
+                source.pushLocalPack(id, mc.gameDirectory.toPath().resolve(parts[1]));
+            }
+        });
+        Driver.STEPS.put("resource_text", (mc, arg) -> {
+            var parts = arg.split(" ", 2);
+            var resource = mc.getResourceManager().getResource(net.minecraft.resources.Identifier.parse(parts[0]));
+            String value = "absent";
+            if (resource.isPresent()) {
+                try (var reader = resource.get().openAsReader()) { value = reader.readLine(); }
+            }
+            if (!parts[1].equals(value)) throw new IllegalStateException("Unexpected resource value " + value);
+        });
         Driver.STEPS.put("row_order", (mc, expected) -> {
             for (var widget : mc.screen.children()) {
                 if (widget instanceof net.minecraft.client.gui.components.ObjectSelectionList<?> list) {

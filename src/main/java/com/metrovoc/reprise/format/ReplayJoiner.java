@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -53,6 +54,9 @@ public final class ReplayJoiner {
             }
             if (!a.server.equals(b.server)) combined.server = "";
             return ReplayOutput.write(folder, combined, zip -> {
+                var packs = new HashSet<String>();
+                first.copyPacks(zip, packs);
+                second.copyPacks(zip, packs);
                 Map<HashCode, Integer> chunks = new HashMap<>();
                 var out = new DataOutputStream(new BufferedOutputStream(zip));
                 int[] firstIds = copyChunks(first, zip, out, chunks);

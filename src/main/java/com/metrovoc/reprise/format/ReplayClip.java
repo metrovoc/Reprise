@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +34,7 @@ public final class ReplayClip {
             clip.markers.forEach(m -> m.tick -= start);
             clip.segments.clear();
             return ReplayOutput.write(source.toAbsolutePath().getParent(), clip, zip -> {
+                replay.copyPacks(zip, new HashSet<>());
                 var chunkIds = new LinkedHashMap<Integer, Integer>();
                 int first = 0;
                 while (first + 1 < original.segments.size() && original.segments.get(first + 1).startTick <= start) first++;

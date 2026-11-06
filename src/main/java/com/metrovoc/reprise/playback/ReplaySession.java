@@ -6,6 +6,7 @@ import com.google.common.hash.Hashing;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.editor.EnvironmentSettings.Layer;
 import com.metrovoc.reprise.format.Actions;
+import com.metrovoc.reprise.format.EmbeddedPacks;
 import com.metrovoc.reprise.format.ReplayFile;
 import com.metrovoc.reprise.format.ReplayMeta;
 import com.metrovoc.reprise.record.PacketCodecs;
@@ -22,8 +23,10 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.GenericMessageScreen;
@@ -40,16 +43,19 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.ClientboundResourcePackPopPacket;
+import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.configuration.ClientConfigurationPacketListener;
 import net.minecraft.network.protocol.configuration.ClientboundFinishConfigurationPacket;
 import net.minecraft.network.protocol.configuration.ConfigurationProtocols;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
-import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
-import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.server.RunningOnDifferentThreadException;
 import net.minecraft.server.ServerLinks;
@@ -64,7 +70,6 @@ import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import net.neoforged.neoforge.network.payload.ModdedNetworkPayload;
 import net.neoforged.neoforge.network.payload.ModdedNetworkQueryPayload;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 
 /**
  * Plays a replay into the vanilla client. The client believes it is connected to a server: packets from the file are
@@ -105,6 +110,9 @@ public final class ReplaySession {
     private boolean reconnecting;
     private int recorderId = Integer.MIN_VALUE;
     private boolean cameraPlaced;
+    private boolean usedEmbeddedPacks;
+    private final Set<UUID> embeddedPackIds = new HashSet<>();
+    private final List<ClientboundResourcePackPushPacket> snapshotPacks = new ArrayList<>();
     private int failedPackets;
     private UUID spectating;
     private final com.metrovoc.reprise.editor.ReplayProject project;
@@ -183,7 +191,14 @@ public final class ReplaySession {
 
     /** Leaves the replay and returns to the screen it was opened from. */
     public void exit() {
-        this.mc.disconnect(this.exitScreen, false);
+        disconnect(this.exitScreen);
+    }
+
+    private void disconnect(Screen screen) {
+        // Minecraft drops queued tasks as it disconnects. Drain the pack manager's scheduled
+        // changes first so its update remains runnable on the next connection.
+        if (usedEmbeddedPacks) mc.clearDownloadedResourcePacks();
+        mc.disconnect(screen, usedEmbeddedPacks);
     }
 
     /** Called when the client disconnects from the replay. */
@@ -195,9 +210,11 @@ public final class ReplaySession {
         active = null;
         CameraPath.setPreview(false);
         this.project.save();
+        clearEmbeddedPacks();
         try {
             this.file.close();
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            Reprise.LOGGER.warn("Could not close replay files", e);
         }
         if (this.channel != null) {
             this.channel.close();
@@ -529,9 +546,13 @@ public final class ReplaySession {
         this.fastForwarding = true;
         try {
             if (fresh) {
+                embeddedPackIds.clear();
+                snapshotPacks.clear();
                 connect(config);
             } else {
+                clearEmbeddedPacks();
                 resetListenerState();
+                for (var pack : snapshotPacks) handleEmbeddedPack(pack);
             }
             while (buf.hasRemaining()) {
                 int action = buf.get();
@@ -559,7 +580,7 @@ public final class ReplaySession {
         if (this.mc.level != null) {
             this.reconnecting = true;
             try {
-                this.mc.disconnect(new GenericMessageScreen(Component.translatable("reprise.replay.loading")), false);
+                disconnect(new GenericMessageScreen(Component.translatable("reprise.replay.loading")));
             } finally {
                 this.reconnecting = false;
             }
@@ -577,6 +598,14 @@ public final class ReplaySession {
 
         for (byte[] bytes : config) {
             Packet<? super ClientConfigurationPacketListener> packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
+            if (packet instanceof ClientboundResourcePackPopPacket pop) {
+                snapshotPacks.removeIf(push -> pop.id().isEmpty() || pop.id().get().equals(push.id()));
+            }
+            if (packet instanceof ClientboundResourcePackPushPacket push && handleEmbeddedPack(push)) {
+                snapshotPacks.removeIf(old -> old.id().equals(push.id()));
+                snapshotPacks.add(push);
+                continue;
+            }
             if (com.metrovoc.reprise.record.Recorder.liveOnly(packet) || packet instanceof ClientboundFinishConfigurationPacket) continue;
             if (packet instanceof ClientboundCustomPayloadPacket custom
                 && !(custom.payload() instanceof ModdedNetworkQueryPayload)
@@ -645,6 +674,7 @@ public final class ReplaySession {
             }
             return;
         }
+        if (handleEmbeddedPack(packet)) return;
         packet = this.filter.apply(packet);
         if (packet == null) {
             return;
@@ -673,6 +703,31 @@ public final class ReplaySession {
         } else if (cameraPos != null && this.mc.player != null) {
             this.mc.player.snapTo(cameraPos.x, cameraPos.y, cameraPos.z, yRot, xRot);
         }
+    }
+
+    private void clearEmbeddedPacks() {
+        for (UUID id : embeddedPackIds) mc.getDownloadedPackSource().popPack(id);
+        embeddedPackIds.clear();
+    }
+
+    private boolean handleEmbeddedPack(Packet<?> packet) {
+        if (packet instanceof ClientboundResourcePackPopPacket pop) {
+            if (pop.id().isPresent()) embeddedPackIds.remove(pop.id().get());
+            else embeddedPackIds.clear();
+            return false; // Vanilla applies the pop to the whole server pack stack.
+        }
+        if (!(packet instanceof ClientboundResourcePackPushPacket push) || !push.url().startsWith(EmbeddedPacks.URL_PREFIX)) return false;
+        try {
+            Path pack = file.localPack(push.url().substring(EmbeddedPacks.URL_PREFIX.length()));
+            var source = mc.getDownloadedPackSource();
+            source.allowServerPacks();
+            source.pushLocalPack(push.id(), pack);
+            usedEmbeddedPacks = true;
+            embeddedPackIds.add(push.id());
+        } catch (IOException e) {
+            Reprise.LOGGER.warn("Could not load embedded resource pack {}", push.id(), e);
+        }
+        return true;
     }
 
     private void addCameraInfo(ClientPacketListener listener) {

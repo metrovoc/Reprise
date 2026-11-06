@@ -9,22 +9,24 @@ import com.metrovoc.reprise.playback.ReplaySession;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.textures.FilterMode;
-import java.util.OptionalInt;
-import net.minecraft.client.renderer.RenderPipelines;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.OptionalInt;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.resources.server.ServerPackManager.ActivationStatus;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 
@@ -258,6 +260,12 @@ public final class VideoExporter {
             stop(false, Component.translatable("reprise.export.failed", String.valueOf(this.writeError.getMessage())));
             return 0;
         }
+        if (mc.getOverlay() instanceof LoadingOverlay overlay) {
+            // The export clock freezes world ticks here. The overlay still needs its tick
+            // and render callbacks to finish applying the pack and dismiss itself.
+            overlay.tick();
+            return 0;
+        }
         if (this.progressFrame) {
             // A frame that only shows the progress screen; the replay does not move.
             this.progressFrame = false;
@@ -334,6 +342,15 @@ public final class VideoExporter {
         if (this.session.tick() < this.neededTick && this.session.tick() < this.session.duration()) {
             // The game runs at most 10 ticks per frame; a fast timelapse needs more frames to catch up.
             return;
+        }
+        // A recorded pack change can schedule its reload during the very tick being rendered.
+        // Keep this output frame pending until Minecraft has applied the new textures.
+        if (mc.getOverlay() instanceof LoadingOverlay) return;
+        for (var pack : mc.getDownloadedPackSource().manager.packs) {
+            if (pack.path == null) continue;
+            boolean shouldBeActive = !pack.isRemoved();
+            if (pack.activationStatus == ActivationStatus.PENDING
+                || (pack.activationStatus == ActivationStatus.ACTIVE) != shouldBeActive) return;
         }
         if (!worldReady() && this.waited < MAX_WAIT_FRAMES) {
             // Render this moment again once the chunks in view are built.

@@ -9,11 +9,14 @@ import java.io.InputStream;
 import java.lang.ref.SoftReference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /** A {@code .reprise} file opened for playback. Segments and chunk files load on demand and may be dropped under memory pressure. */
 public final class ReplayFile implements Closeable {
@@ -22,6 +25,32 @@ public final class ReplayFile implements Closeable {
     private final ReplayMeta meta;
     private final Map<Integer, SoftReference<byte[]>> segments = new HashMap<>();
     private final Map<Integer, SoftReference<ChunkFile>> chunkFiles = new HashMap<>();
+
+    private final Map<String, Path> extractedPacks = new HashMap<>();
+
+    public Path localPack(String hash) throws IOException {
+        Path existing = extractedPacks.get(hash);
+        if (existing != null) return existing;
+        Path temp = Files.createTempFile("reprise-pack-", ".zip");
+        try {
+            try (var output = Files.newOutputStream(temp)) {
+                EmbeddedPacks.extract(zip, hash, output);
+            }
+            extractedPacks.put(hash, temp);
+            return temp;
+        } finally {
+            if (!extractedPacks.containsKey(hash)) Files.deleteIfExists(temp);
+        }
+    }
+
+    void copyPacks(ZipOutputStream out, Set<String> copied) throws IOException {
+        for (var entries = zip.entries(); entries.hasMoreElements();) {
+            String name = entries.nextElement().getName();
+            if (!name.startsWith("resourcepack/") || !name.endsWith(".zip")) continue;
+            String hash = name.substring("resourcepack/".length(), name.length() - 4);
+            if (copied.add(hash)) EmbeddedPacks.copy(zip, out, hash);
+        }
+    }
 
     private record ChunkFile(byte[] data, IntArrayList offsets, IntArrayList lengths) {}
 
@@ -165,5 +194,7 @@ public final class ReplayFile implements Closeable {
     @Override
     public void close() throws IOException {
         this.zip.close();
+        for (Path pack : extractedPacks.values()) Files.deleteIfExists(pack);
+        extractedPacks.clear();
     }
 }

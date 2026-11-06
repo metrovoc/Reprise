@@ -2,6 +2,7 @@ package com.metrovoc.reprise.record;
 
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
+import com.metrovoc.reprise.format.EmbeddedPacks;
 import com.metrovoc.reprise.format.ReplayMeta;
 import io.netty.buffer.ByteBuf;
 import java.io.IOException;
@@ -10,12 +11,14 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.resources.server.ServerPackManager;
 import net.minecraft.network.PacketListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
@@ -49,6 +52,7 @@ public final class Recorder {
     private boolean resetPending = false;
     private boolean paused;
     private boolean configuring;
+    private List<ServerPackManager.ServerPackData> recordedPacks = List.of();
     private int failedEncodes;
     private int segmentTicks;
     private int recordedTicks;
@@ -217,6 +221,7 @@ public final class Recorder {
     }
 
     private static final Set<Class<?>> CAPTURED_SEPARATELY = Set.of(
+        ClientboundResourcePackPushPacket.class, ClientboundResourcePackPopPacket.class,
         ClientboundCustomPayloadPacket.class, ClientboundSetPlayerInventoryPacket.class, ClientboundSetHeldSlotPacket.class,
         ClientboundSetHealthPacket.class, ClientboundSetExperiencePacket.class, ClientboundSoundPacket.class, ClientboundSoundEntityPacket.class
     );
@@ -315,6 +320,31 @@ public final class Recorder {
         this.writer.submit(w -> w.configPacket(bytes));
     }
 
+    /** Record the packs Minecraft actually applied, in stack order, after download and acceptance. */
+    void recordPacks(boolean snapshot) {
+        var packs = minecraft.getDownloadedPackSource().manager.packs;
+        if (!snapshot && packs.isEmpty() && recordedPacks.isEmpty()) return;
+        var applied = packs.stream().filter(pack -> pack.activationStatus
+            == ServerPackManager.ActivationStatus.ACTIVE).toList();
+        if (!snapshot && applied.equals(recordedPacks)) return;
+        var clear = new ClientboundResourcePackPopPacket(Optional.empty());
+        if (snapshot) writeConfig(clear);
+        else writeGame(clear);
+        var codec = gameCodec;
+        for (var pack : applied) {
+            var file = pack.path;
+            var id = pack.id;
+            writer.submit(w -> {
+                String hash = w.storePack(pack, file);
+                var push = new ClientboundResourcePackPushPacket(id, EmbeddedPacks.URL_PREFIX + hash,
+                    hash, false, Optional.empty());
+                if (snapshot) w.configPacket(PacketCodecs.encode(PacketCodecs.CONFIG, push));
+                else w.gamePacket(PacketCodecs.encode(codec, push));
+            });
+        }
+        recordedPacks = applied;
+    }
+
     // Ticking, at the end of every client tick.
 
     public void endTick() {
@@ -332,6 +362,7 @@ public final class Recorder {
             beginSegment(this.resetPending || this.recordedTicks == 0);
             return;
         }
+        recordPacks(false);
         this.self.tick();
         this.writer.submit(ReplayWriter::tick);
         this.recordedTicks++;

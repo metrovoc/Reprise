@@ -17,7 +17,8 @@ installed.
 - Leaving the world saves the replay to `reprise/replays/` in the game folder. A recording cut short by a crash is
   repaired and saved the next time you open the replay list.
 
-Reprise records world updates and registered clientbound mod payloads during play. It also records your own movement,
+Reprise records world updates and registered clientbound mod payloads during play. Recordings include the server
+resource packs Minecraft applied and follow pack changes during playback and export. It also records your own movement,
 held items, swings, block breaking, block placement and sounds. To capture all nine hotbar slots, stack
 counts, selection, food and experience, enable **Record my hotbar and HUD** in the mod's recording settings
 before starting a recording. When you spectate the recording player, their items and applicable survival
@@ -36,7 +37,8 @@ Flashback editor projects, optional sub-tick camera samples, and wall-clock timi
 **ReplayMod MCPR.** Import format 14 recordings made with the Minecraft 26.1.2 network protocol.
 Recorded packets and markers use the 20-tick timeline. Playback opens when the recording player and terrain
 first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
-connection configuration. ReplayMod camera paths and embedded resource packs are outside the import.
+connection configuration and includes embedded server resource packs. Camera paths created in ReplayMod are
+outside the import.
 
 ## Watching
 

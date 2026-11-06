@@ -2,6 +2,7 @@ package com.metrovoc.reprise.record;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
+import com.google.common.hash.HashingInputStream;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.format.Actions;
 import com.metrovoc.reprise.format.ReplayMeta;
@@ -9,6 +10,7 @@ import com.metrovoc.reprise.util.Varints;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,6 +22,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import net.minecraft.client.resources.server.ServerPackManager;
 
 /**
  * Writes a recording folder on its own thread. The game thread hands over already encoded packets, so this thread only
@@ -37,6 +40,7 @@ public final class ReplayWriter {
     private ReplayMeta.Segment currentSegment;
     private DataOutputStream chunkOut;
     private int chunkOutFile = -1;
+    private final Map<ServerPackManager.ServerPackData, String> packHashes = new HashMap<>();
     private final Map<HashCode, Integer> chunkIndex = new HashMap<>();
 
     public ReplayWriter(Path dir, ReplayMeta meta) throws IOException {
@@ -150,6 +154,30 @@ public final class ReplayWriter {
 
     public void configPacket(byte[] bytes) {
         action(Actions.CONFIG_PACKET, bytes);
+    }
+
+    String storePack(ServerPackManager.ServerPackData pack, Path source) {
+        String cached = packHashes.get(pack);
+        if (cached != null) return cached;
+        try {
+            Path folder = Files.createDirectories(dir.resolve("resourcepack"));
+            Path temp = Files.createTempFile(folder, "copy-", ".tmp");
+            try {
+                String hash;
+                try (var input = new HashingInputStream(Hashing.sha1(), Files.newInputStream(source))) {
+                    Files.copy(input, temp, StandardCopyOption.REPLACE_EXISTING);
+                    hash = input.hash().toString();
+                }
+                Path target = folder.resolve(hash + ".zip");
+                if (!Files.exists(target)) Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+                packHashes.put(pack, hash);
+                return hash;
+            } finally {
+                Files.deleteIfExists(temp);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not record applied server pack", e);
+        }
     }
 
     /** A chunk packet: stored once in the chunk cache however often it is recorded. */
