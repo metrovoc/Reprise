@@ -80,7 +80,7 @@ public final class ExportScreen extends Screen {
             this.settings.height = r[1];
         });
         addRenderableWidget(Button.builder(Component.translatable("reprise.export.custom"),
-            b -> minecraft.setScreen(new CustomVideoScreen(this, session.project()))).bounds(x + w - 136, y + 24, 68, 20).build());
+            b -> minecraft.setScreen(new CustomVideoScreen(this, session.project(), session.duration()))).bounds(x + w - 136, y + 24, 68, 20).build());
         cycle(x, y + 48, w / 2 - 2, () -> Component.translatable("reprise.export.fps", this.settings.frameRate().toString()), () -> {
             this.settings.setFrameRate(new FrameRate(next(FRAME_RATES, (int) settings.frameRate().value()), 1));
             updateOutputSummary();
@@ -177,8 +177,13 @@ public final class ExportScreen extends Screen {
     static Component outputSummary(ReplayProject project, int recordedTicks) {
         double fps = project.export.frameRate().value();
         int end = project.end(project.shotDuration(recordedTicks));
-        long frames = project.frameSchedule(project.start(), end, fps).frameCount();
-        return Component.translatable("reprise.export.output_duration", Timecode.outputDuration(frames, fps), frames);
+        return outputSummary(project, project.start(), end, fps);
+    }
+
+    static Component outputSummary(ReplayProject project, int start, int end, double fps) {
+        long frames = project.frameSchedule(start, end, fps).frameCount();
+        return Component.translatable(frames == 1 ? "reprise.export.output_duration_one" : "reprise.export.output_duration",
+            Timecode.outputDuration(frames, fps), frames);
     }
 
     private boolean hardware() {
