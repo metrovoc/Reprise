@@ -298,7 +298,7 @@ public final class PlaybackControls {
     private static void hud(GuiGraphicsExtractor g, float partialTick) {
         ReplaySession session = ReplaySession.active();
         Minecraft mc = Minecraft.getInstance();
-        if (session == null || mc.options.hideGui || mc.screen instanceof EditorScreen || com.metrovoc.reprise.export.VideoExporter.isRunning()) {
+        if (session == null || mc.options.hideGui || mc.screen != null || com.metrovoc.reprise.export.VideoExporter.isRunning()) {
             return;
         }
         int w = g.guiWidth();

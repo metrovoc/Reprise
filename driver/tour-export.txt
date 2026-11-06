@@ -1,0 +1,12 @@
+gui 0
+replay latest
+wait 120
+replay editor
+wait 5
+press Export
+wait 5
+shot x01_export
+press More options
+wait 5
+shot x02_export_more
+quit

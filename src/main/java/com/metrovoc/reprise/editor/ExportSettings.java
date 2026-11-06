@@ -9,11 +9,11 @@ public final class ExportSettings {
     }
 
     public enum Format {
-        MP4_H264("mp4", "H.264 MP4"),
-        MP4_H265("mp4", "H.265 MP4"),
-        WEBM_VP9("webm", "VP9 WebM"),
-        MOV_PRORES("mov", "ProRes 4444 MOV"),
-        PNG_SEQUENCE("png", "PNG sequence");
+        MP4_H264("mp4", "MP4 (H.264, plays anywhere)"),
+        MP4_H265("mp4", "MP4 (H.265, smaller)"),
+        WEBM_VP9("webm", "WebM (VP9)"),
+        MOV_PRORES("mov", "MOV (ProRes, for editing)"),
+        PNG_SEQUENCE("png", "PNG images");
 
         public final String extension;
         public final String label;
@@ -42,7 +42,7 @@ public final class ExportSettings {
     public Format format = Format.MP4_H264;
     public boolean hideHud = true;
     public boolean handsOnly;
-    public boolean audio = false;
+    public boolean audio = true;
     public boolean transparentSky;
     public boolean supersample;
     public boolean depthMap;
