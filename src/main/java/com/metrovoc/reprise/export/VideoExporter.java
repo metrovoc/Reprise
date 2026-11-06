@@ -15,6 +15,7 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -46,7 +47,7 @@ public final class VideoExporter {
     private final int start, end, width, height;
     private final double[] frameTicks;
     private final int totalFrames;
-    private final Path output;
+    private final ExportFiles files;
     private final Screen returnTo;
     private final FrameSink sink;
     private final AudioCapture audio;
@@ -107,24 +108,26 @@ public final class VideoExporter {
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
         String base = session.file().path().getFileName().toString().replaceFirst("\\.reprise$", "") + "_" + stamp;
         Path dir = ReprisePaths.exports();
-        if (settings.format == ExportSettings.Format.PNG_SEQUENCE) {
-            this.output = PngSink.createDirectory(dir, base);
-            this.sink = new PngSink(this.output, this.width, this.height, this.transparent);
-        } else {
-            String ffmpeg = FfmpegSink.find(settings.ffmpeg);
-            if (ffmpeg == null) {
-                throw new IllegalStateException(Component.translatable("reprise.export.no_ffmpeg").getString());
-            }
-            this.output = dir.resolve(base + "." + settings.format.extension);
-            this.sink = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.output, dir.resolve(base + ".log"));
-        }
         boolean sequence = settings.format == ExportSettings.Format.PNG_SEQUENCE;
+        this.files = new ExportFiles(dir, base, sequence ? "" : "." + settings.format.extension);
+        FrameSink opened = null;
         try {
-            Path audioFile = sequence ? this.output.resolve("audio.wav.part") : dir.resolve(base + ".f32");
-            this.audio = settings.audio ? new AudioCapture(audioFile,
+            if (sequence) {
+                Files.createDirectory(this.files.media);
+                opened = new PngSink(this.files.media, this.width, this.height, this.transparent);
+            } else {
+                String ffmpeg = FfmpegSink.find(settings.ffmpeg);
+                if (ffmpeg == null) {
+                    throw new IllegalStateException(Component.translatable("reprise.export.no_ffmpeg").getString());
+                }
+                opened = new FfmpegSink(ffmpeg, settings, this.width, this.height, this.files.media, this.files.work.resolve("encode.log"));
+            }
+            this.audio = settings.audio ? new AudioCapture(this.files.work.resolve(sequence ? "audio.wav" : "audio.f32"),
                 settings.fps, this.totalFrames, sequence) : null;
-        } catch (IOException e) {
-            this.sink.abort();
+            this.sink = opened;
+        } catch (Exception e) {
+            if (opened != null) opened.abort();
+            cleanupFiles(true);
             throw e;
         }
         this.writer = new Thread(this::write, "Reprise Export Writer");
@@ -186,8 +189,8 @@ public final class VideoExporter {
             exporter.stop(false, Component.translatable("reprise.export.failed", String.valueOf(e.getMessage())));
             throw e;
         }
-        Reprise.LOGGER.info("Exporting ticks {}..{} as {} frames at {}x{} to {}", exporter.start, exporter.end, exporter.totalFrames,
-            exporter.width, exporter.height, exporter.output);
+        Reprise.LOGGER.info("Exporting ticks {}..{} as {} frames at {}x{}", exporter.start, exporter.end, exporter.totalFrames,
+            exporter.width, exporter.height);
     }
 
     public int renderWidth() {
@@ -443,13 +446,22 @@ public final class VideoExporter {
         stop(false, Component.translatable("reprise.export.cancelled"));
     }
 
+    public static void sessionClosed(ReplaySession session) {
+        if (running != null && running.session == session) running.stop(false, null, false);
+    }
+
     private void stop(boolean success, Component failure) {
+        stop(success, failure, true);
+    }
+
+    private void stop(boolean success, Component failure, boolean showResult) {
         if (this.finished) {
             return;
         }
         this.finished = true;
         FlawlessFrames.setEnabled(false);
         boolean ok = success;
+        Path output = null;
         try {
             if (success) {
                 enqueue(new byte[0]);
@@ -464,59 +476,84 @@ public final class VideoExporter {
                         failure = Component.translatable("reprise.export.audio_failed");
                     }
                 }
+                if (ok) output = this.files.publish();
             } else {
-                this.writer.interrupt();
-                this.sink.abort();
-                this.writer.join();
+                abortWriter();
             }
         } catch (Exception e) {
+            abortWriter();
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             Reprise.LOGGER.error("Finishing the video failed", e);
             ok = false;
         }
         if (this.audio != null && AudioCapture.loopback()) {
             this.audio.stop();
         }
-        if (this.audio != null) {
-            try {
-                java.nio.file.Files.deleteIfExists(this.audio.file());
-            } catch (java.io.IOException ignored) {
-            }
-        }
+        cleanupFiles(!ok && (success || this.writeError != null));
         if (this.downsampled != null) {
             this.downsampled.destroyBuffers();
         }
         running = null;
         restore();
-        Component message = ok ? Component.translatable("reprise.export.done", this.output.getFileName().toString())
+        Component message = ok ? Component.translatable("reprise.export.done", output.getFileName().toString())
             : failure != null ? failure : Component.translatable("reprise.export.failed", "ffmpeg");
-        Reprise.LOGGER.info("Export {} after {} frames in {} s: {}", ok ? "finished" : "stopped", this.frame, elapsedMillis() / 1000, this.output);
-        this.mc.setScreen(new ExportDoneScreen(this.returnTo, ok, message, this.output));
+        if (ok) {
+            Reprise.LOGGER.info("Export finished after {} frames in {} s: {}", this.frame, elapsedMillis() / 1000, output);
+        } else {
+            Reprise.LOGGER.info("Export stopped after {} frames", this.frame);
+        }
+        if (showResult) this.mc.setScreen(new ExportDoneScreen(this.returnTo, ok, message, output));
+    }
+
+    private void abortWriter() {
+        this.writer.interrupt();
+        this.sink.abort();
+        boolean interrupted = false;
+        while (this.writer.isAlive()) {
+            try {
+                this.writer.join();
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+    }
+
+    private void cleanupFiles(boolean reportEncoderError) {
+        if (reportEncoderError) {
+            FfmpegSink.reportLog(this.files.work.resolve("encode.log"));
+            FfmpegSink.reportLog(this.files.work.resolve("mux.log"));
+        }
+        try {
+            this.files.close();
+        } catch (IOException e) {
+            Reprise.LOGGER.error("Could not clean export folder {}", this.files.work, e);
+        }
     }
 
     /** Muxes the captured sound into the video, or writes it next to a PNG sequence. */
     private boolean addAudio() {
         try {
             if (this.settings.format == ExportSettings.Format.PNG_SEQUENCE) {
-                java.nio.file.Files.move(this.audio.file(), this.output.resolve("audio.wav"));
+                java.nio.file.Files.move(this.audio.file(), this.files.media.resolve("audio.wav"));
                 return true;
             }
             String ffmpeg = FfmpegSink.find(this.settings.ffmpeg);
             if (ffmpeg == null) {
                 return false;
             }
-            String name = this.output.getFileName().toString();
-            Path muxed = this.output.resolveSibling(name.replaceFirst("(\\.[^.]+)$", ".audio$1"));
+            Path muxed = this.files.work.resolve("muxed." + this.settings.format.extension);
             String codec = switch (this.settings.format) {
                 case WEBM_VP9 -> "libopus";
                 case MOV_PRORES -> "pcm_s16le";
                 default -> "aac";
             };
-            boolean ok = FfmpegSink.run(ffmpeg, java.util.List.of("-i", this.output.toString(),
+            boolean ok = FfmpegSink.run(ffmpeg, java.util.List.of("-i", this.files.media.toString(),
                 "-f", "f32le", "-ar", String.valueOf(AudioCapture.RATE), "-ac", "2", "-i", this.audio.file().toString(),
                 "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", codec, "-b:a", "256k", "-shortest", muxed.toString()),
-                this.output.resolveSibling(name + ".audio.log"));
+                this.files.work.resolve("mux.log"));
             if (ok) {
-                java.nio.file.Files.move(muxed, this.output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                java.nio.file.Files.move(muxed, this.files.media, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             return ok;
         } catch (Exception e) {

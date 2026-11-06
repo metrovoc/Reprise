@@ -70,7 +70,7 @@ final class FfmpegSink implements FrameSink {
                 throw new IOException("Hardware encoder check interrupted", e);
             } finally {
                 if (process.isAlive()) {
-                    process.destroyForcibly();
+                    process.destroyForcibly().onExit().join();
                 }
             }
         }
@@ -87,7 +87,7 @@ final class FfmpegSink implements FrameSink {
         this.stdin.close();
         try {
             if (!this.process.waitFor(10, TimeUnit.MINUTES)) {
-                this.process.destroyForcibly();
+                this.process.destroyForcibly().onExit().join();
                 return false;
             }
         } catch (InterruptedException e) {
@@ -95,7 +95,7 @@ final class FfmpegSink implements FrameSink {
             return false;
         }
         if (this.process.exitValue() != 0) {
-            Reprise.LOGGER.error("ffmpeg failed ({}); see {}", this.process.exitValue(), this.log);
+            Reprise.LOGGER.error("ffmpeg failed ({})", this.process.exitValue());
             return false;
         }
         Files.deleteIfExists(this.log);
@@ -104,7 +104,7 @@ final class FfmpegSink implements FrameSink {
 
     @Override
     public void abort() {
-        this.process.destroyForcibly();
+        this.process.destroyForcibly().onExit().join();
     }
 
     /** Runs ffmpeg once with these arguments; true if it succeeded. */
@@ -112,16 +112,30 @@ final class FfmpegSink implements FrameSink {
         List<String> cmd = new ArrayList<>(List.of(ffmpeg, "-hide_banner", "-y"));
         cmd.addAll(args);
         Process p = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(log.toFile()).start();
-        if (!p.waitFor(10, TimeUnit.MINUTES)) {
-            p.destroyForcibly();
-            return false;
+        try {
+            if (!p.waitFor(10, TimeUnit.MINUTES)) return false;
+        } finally {
+            if (p.isAlive()) p.destroyForcibly().onExit().join();
         }
         if (p.exitValue() == 0) {
             Files.deleteIfExists(log);
             return true;
         }
-        Reprise.LOGGER.error("ffmpeg failed ({}); see {}", p.exitValue(), log);
+        Reprise.LOGGER.error("ffmpeg failed ({})", p.exitValue());
         return false;
+    }
+
+    static void reportLog(Path log) {
+        if (!Files.isRegularFile(log)) return;
+        try (var input = new java.io.RandomAccessFile(log.toFile(), "r")) {
+            int count = (int) Math.min(8192, input.length());
+            input.seek(input.length() - count);
+            byte[] tail = new byte[count];
+            input.readFully(tail);
+            Reprise.LOGGER.error("ffmpeg output: {}", new String(tail, java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            Reprise.LOGGER.warn("Could not read encoder output", e);
+        }
     }
 
     /** The ffmpeg to use: the configured path, then the game folder, then PATH and the usual install folders. */

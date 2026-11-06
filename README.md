@@ -108,6 +108,9 @@ follows the replay and the shader frame counter advances once per exported frame
 - Resolutions from 720p to 4K, plus vertical and square; 24, 30, 60 or 120 fps.
 - Sound: the replay's sounds as you would hear them at the camera, in 48 kHz stereo.
 
+Completed exports appear in the exports folder after all frames and any soundtrack are written. You can cancel
+with Escape or **Cancel**. Repeated exports with the same name get a numbered suffix.
+
 Video formats need [ffmpeg](https://ffmpeg.org/). Reprise finds it on your `PATH`, in the usual Homebrew folders,
 or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg. With sound enabled, the sequence includes a 48 kHz stereo PCM soundtrack in `audio.wav`.
 

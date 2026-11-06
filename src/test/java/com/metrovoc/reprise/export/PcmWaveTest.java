@@ -6,10 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 class PcmWaveTest {
     @Test void smallWaveDeclaresStereoPcmAndExactPayloadLength() {
@@ -40,10 +37,4 @@ class PcmWaveTest {
         assertEquals(0, PcmWave.sample(0f));
     }
 
-    @Test void retryKeepsThePreviousSequence(@TempDir Path root) throws Exception {
-        Path first = PngSink.createDirectory(root, "shot");
-        Files.writeString(first.resolve("audio.wav"), "first");
-        assertNotEquals(first, PngSink.createDirectory(root, "shot"));
-        assertEquals("first", Files.readString(first.resolve("audio.wav")));
-    }
 }

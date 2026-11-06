@@ -2,7 +2,6 @@ package com.metrovoc.reprise.export;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /** Writes each frame as a numbered PNG. */
@@ -11,17 +10,6 @@ final class PngSink implements FrameSink {
     private final int width, height;
     private final boolean alpha;
     private int index;
-
-    static Path createDirectory(Path parent, String base) throws IOException {
-        for (int attempt = 1; ; attempt++) {
-            Path path = parent.resolve(attempt == 1 ? base : base + "_" + attempt);
-            try {
-                return Files.createDirectory(path);
-            } catch (java.nio.file.FileAlreadyExistsException ignored) {
-                // A short export or a retry can start in the same second as the last one.
-            }
-        }
-    }
 
     PngSink(Path dir, int width, int height, boolean alpha) {
         this.dir = dir;

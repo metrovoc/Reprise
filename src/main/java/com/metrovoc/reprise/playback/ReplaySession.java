@@ -177,6 +177,7 @@ public final class ReplaySession {
         if (this.reconnecting) {
             return;
         }
+        com.metrovoc.reprise.export.VideoExporter.sessionClosed(this);
         active = null;
         CameraPath.setPreview(false);
         this.project.save();
