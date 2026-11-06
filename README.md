@@ -122,7 +122,9 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   playback and bring the destination into view. Fractional keys keep their exact camera time.
 - Select a camera key and choose **Edit camera key…** to enter exact coordinates, yaw, pitch, roll, field of view,
   or a fractional timeline tick. **Save key** applies the changes as one undoable edit.
-- Shift-click camera keys to select a group. Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
+- Shift-click camera keys to select a group. Drag any selected key to move the group together. The first
+  or last key stops the group at the timeline edge. Escape cancels a drag, and Undo restores keys replaced
+  at the destination. Use Ctrl+A/C/X/V (Command on macOS) to select all, copy, cut,
   or paste. Paste places the earliest copied key at the playhead and preserves the spacing of the others. Keys
   at matching times are replaced, and keys past the end are skipped. Undo restores the whole edit.
 - For a moving subject, frame the shot with the free camera, open **Entities**, select the subject and choose eyes,

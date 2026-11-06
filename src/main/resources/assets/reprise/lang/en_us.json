@@ -177,7 +177,7 @@
   "reprise.key.fov_range": "Field of view must be between 0° and 180°.",
   "reprise.key.number": "Enter a finite number in each field.",
   "reprise.key.occupied": "Another camera key already occupies this tick.",
-  "reprise.editor.group_selected": "%s camera keys selected · copy, cut or Delete",
+  "reprise.editor.group_selected": "%s camera keys selected · drag to move together, copy, cut or Delete",
   "reprise.editor.selected": "Keyframe %s · Shift-click to select more, drag to move, right-click for curve",
   "reprise.interpolation.spline": "Spline",
   "reprise.interpolation.smooth": "Smooth",

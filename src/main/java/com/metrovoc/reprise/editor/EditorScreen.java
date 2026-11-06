@@ -35,8 +35,8 @@ public final class EditorScreen extends Screen {
 
     private boolean scrubbing;
     private Keyframe dragging;
-    private double dragStart;
-    private boolean dragCheckpoint;
+    private double dragAnchor, dragDelta, minDragDelta, maxDragDelta;
+    private boolean movedDuringDrag;
     private boolean panning;
     private double scrubTick = -1;
     private long lastScrubSeek;
@@ -308,7 +308,7 @@ public final class EditorScreen extends Screen {
         g.fill(0, top, this.width, this.height, Timeline.BACKGROUND);
         super.extractRenderState(g, mouseX, mouseY, a);
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
-        this.timeline.draw(g, this.font, this.session, shown, selection, true);
+        this.timeline.draw(g, this.font, this.session, shown, selection, true, dragDelta);
 
         String position = Timecode.precise(shown);
         if (!session.isPlaying() && scrubTick < 0) {
@@ -380,6 +380,7 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (dragging != null) finishDrag();
         if (super.mouseClicked(event, doubleClick)) {
             return true;
         }
@@ -427,11 +428,14 @@ public final class EditorScreen extends Screen {
                 if (!selection.remove(hit)) selection.add(hit);
                 return true;
             }
-            selectOnly(hit);
+            if (!selection.contains(hit)) selectOnly(hit);
             if (doubleClick) {
                 jumpToCue(hit.tick);
             } else {
-                this.dragStart = hit.tick;
+                dragAnchor = timeline.tickAt(event.x(), session.duration());
+                minDragDelta = -selection.stream().mapToDouble(k -> k.tick).min().orElseThrow();
+                maxDragDelta = session.duration() - selection.stream().mapToDouble(k -> k.tick).max().orElseThrow();
+                movedDuringDrag = false;
                 this.dragging = hit;
             }
             return true;
@@ -450,13 +454,11 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (this.dragging != null) {
-            double tick = Math.round(this.timeline.tickAt(event.x(), this.session.duration()));
-            if (tick != this.dragging.tick && !dragCheckpoint) {
-                project().checkpoint();
-                dragCheckpoint = true;
-            }
-            this.dragging.tick = tick;
-            project().sort();
+            double distance = timeline.tickAt(event.x(), session.duration()) - dragAnchor;
+            if (distance <= minDragDelta) dragDelta = minDragDelta;
+            else if (distance >= maxDragDelta) dragDelta = maxDragDelta;
+            else dragDelta = Math.clamp((double) Math.round(distance), minDragDelta, maxDragDelta);
+            movedDuringDrag |= dragDelta != 0;
             return true;
         }
         if (this.scrubbing) {
@@ -491,15 +493,19 @@ public final class EditorScreen extends Screen {
     }
 
     private void finishDrag() {
-        if (this.dragging.tick != this.dragStart) project().putCameraKey(this.dragging);
-        this.dragging = null;
-        if (dragCheckpoint) project().save();
-        dragCheckpoint = false;
+        if (dragDelta != 0) project().moveCameraKeys(selection, dragDelta);
+        else if (!movedDuringDrag) selectOnly(dragging);
+        clearDrag();
+    }
+
+    private void clearDrag() {
+        dragging = null;
+        dragDelta = 0;
     }
 
     @Override
     public void removed() {
-        if (this.dragging != null) finishDrag();
+        clearDrag();
         this.panning = false;
         super.removed();
     }
@@ -531,6 +537,10 @@ public final class EditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (dragging != null && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            clearDrag();
+            return true;
+        }
         if (RepriseKeys.OPEN_EDITOR.matches(event)) {
             onClose();
             return true;

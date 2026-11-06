@@ -85,7 +85,7 @@ public final class Timeline {
         return mx >= this.x - 4 && mx <= this.x + this.width + 4 && my >= this.y && my <= this.y + this.height;
     }
 
-    public void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, double tick, java.util.Set<Keyframe> selected, boolean detailed) {
+    public void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, double tick, java.util.Set<Keyframe> selected, boolean detailed, double dragDelta) {
         int duration = Math.max(1, session.duration());
         ReplayProject project = session.project();
         int trackTop = this.y + (detailed ? 10 : 0);
@@ -132,10 +132,16 @@ public final class Timeline {
         }
         int mid = (trackTop + trackBottom) / 2;
         for (Keyframe k : project.keyframes) {
-            if (!visible(k.tick, duration)) continue;
-            int kx = xOf(k.tick, duration);
-            int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
-            diamond(g, kx, mid, selected.contains(k) ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
+            if (!selected.contains(k) && visible(k.tick, duration)) {
+                int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
+                diamond(g, xOf(k.tick, duration), mid, color, k.interpolation == Keyframe.Interpolation.HOLD);
+            }
+        }
+        for (Keyframe k : selected) {
+            double preview = k.tick + dragDelta;
+            if (visible(preview, duration)) {
+                diamond(g, xOf(preview, duration), mid, KEYFRAME_SELECTED, k.interpolation == Keyframe.Interpolation.HOLD);
+            }
         }
         for (var key : project.environment.keys) {
             double shot = project.shotTick(key.tick());
