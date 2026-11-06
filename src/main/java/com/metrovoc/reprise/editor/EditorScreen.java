@@ -34,9 +34,7 @@ public final class EditorScreen extends Screen {
     private final java.util.LinkedHashSet<Keyframe> selection = new java.util.LinkedHashSet<>();
 
     private boolean scrubbing;
-    private Keyframe dragging;
-    private double dragAnchor, dragDelta, minDragDelta, maxDragDelta;
-    private boolean movedDuringDrag;
+    private CameraKeyDrag dragging;
     private boolean panning;
     private double scrubTick = -1;
     private long lastScrubSeek;
@@ -308,7 +306,7 @@ public final class EditorScreen extends Screen {
         g.fill(0, top, this.width, this.height, Timeline.BACKGROUND);
         super.extractRenderState(g, mouseX, mouseY, a);
         double shown = this.scrubTick >= 0 ? this.scrubTick : this.session.visualTick(a);
-        this.timeline.draw(g, this.font, this.session, shown, selection, true, dragDelta);
+        this.timeline.draw(g, this.font, this.session, shown, selection, true, dragging == null ? java.util.Map.of() : dragging.preview);
 
         String position = Timecode.precise(shown);
         if (!session.isPlaying() && scrubTick < 0) {
@@ -320,7 +318,10 @@ public final class EditorScreen extends Screen {
         g.text(font, time, timeX, top + INFO_Y, 0xFFFFFFFF);
         Keyframe selected = singleKey();
         String info = "";
-        if (selection.size() > 1) {
+        if (dragging != null && dragging.scaling) {
+            info = dragging.collapsed ? Component.translatable("reprise.editor.scale_collapsed").getString()
+                : Component.translatable("reprise.editor.scale_percent", Math.round(dragging.scale * 100)).getString();
+        } else if (selection.size() > 1) {
             info = Component.translatable("reprise.editor.group_selected", selection.size()).getString();
         } else if (selected != null) {
             info = Component.translatable("reprise.editor.selected", Timecode.precise(selected.tick)).getString();
@@ -432,11 +433,7 @@ public final class EditorScreen extends Screen {
             if (doubleClick) {
                 jumpToCue(hit.tick);
             } else {
-                dragAnchor = timeline.tickAt(event.x(), session.duration());
-                minDragDelta = -selection.stream().mapToDouble(k -> k.tick).min().orElseThrow();
-                maxDragDelta = session.duration() - selection.stream().mapToDouble(k -> k.tick).max().orElseThrow();
-                movedDuringDrag = false;
-                this.dragging = hit;
+                dragging = new CameraKeyDrag(hit, selection, timeline.tickAt(event.x(), session.duration()), session.duration());
             }
             return true;
         }
@@ -454,11 +451,7 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (this.dragging != null) {
-            double distance = timeline.tickAt(event.x(), session.duration()) - dragAnchor;
-            if (distance <= minDragDelta) dragDelta = minDragDelta;
-            else if (distance >= maxDragDelta) dragDelta = maxDragDelta;
-            else dragDelta = Math.clamp((double) Math.round(distance), minDragDelta, maxDragDelta);
-            movedDuringDrag |= dragDelta != 0;
+            dragging.update(timeline.tickAt(event.x(), session.duration()), event.hasAltDown());
             return true;
         }
         if (this.scrubbing) {
@@ -493,19 +486,14 @@ public final class EditorScreen extends Screen {
     }
 
     private void finishDrag() {
-        if (dragDelta != 0) project().moveCameraKeys(selection, dragDelta);
-        else if (!movedDuringDrag) selectOnly(dragging);
-        clearDrag();
-    }
-
-    private void clearDrag() {
+        if (!dragging.preview.isEmpty()) project().retimeCameraKeys(dragging.preview);
+        else if (!dragging.moved) selectOnly(dragging.grabbed);
         dragging = null;
-        dragDelta = 0;
     }
 
     @Override
     public void removed() {
-        clearDrag();
+        dragging = null;
         this.panning = false;
         super.removed();
     }
@@ -538,7 +526,10 @@ public final class EditorScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (dragging != null && event.key() == GLFW.GLFW_KEY_ESCAPE) {
-            clearDrag();
+            dragging = null;
+            return true;
+        }
+        if (dragging != null && (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT)) {
             return true;
         }
         if (RepriseKeys.OPEN_EDITOR.matches(event)) {

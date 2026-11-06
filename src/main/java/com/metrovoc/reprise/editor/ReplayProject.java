@@ -218,11 +218,12 @@ public final class ReplayProject {
         insertCameraKeys(keys);
     }
 
-    void moveCameraKeys(java.util.Set<Keyframe> keys, double delta) {
-        if (delta == 0 || keys.isEmpty()) return;
+    void retimeCameraKeys(Map<Keyframe, Double> times) {
+        var keys = times.keySet();
+        if (keys.isEmpty()) return;
         checkpoint();
         keyframes.removeIf(keys::contains);
-        keys.forEach(key -> key.tick += delta);
+        times.forEach((key, tick) -> key.tick = tick);
         insertCameraKeys(keys);
     }
 
