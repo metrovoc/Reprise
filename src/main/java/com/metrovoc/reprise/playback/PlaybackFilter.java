@@ -28,6 +28,7 @@ final class PlaybackFilter {
     }
 
     Packet<? super ClientGamePacketListener> apply(Packet<? super ClientGamePacketListener> packet) {
+        if (com.metrovoc.reprise.record.Recorder.liveOnly(packet)) return null;
         boolean fast = this.session.isFastForwarding();
         switch (packet) {
             case net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom -> {

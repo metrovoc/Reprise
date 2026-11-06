@@ -64,10 +64,12 @@ public final class ReplayBrowserScreen extends Screen {
         int x = this.width / 2 - w - 4;
         if (this.joinFirst == null) {
             this.playButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.play"), b -> play())
-                .bounds(x, y, w, 20).build());
+                .bounds(x, y, 96, 20).build());
             this.joinButton = this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.join"), b ->
                 this.minecraft.setScreen(new ReplayBrowserScreen(this, this.list.getSelected().path)))
-                .bounds(x + w + 8, y, w, 20).build());
+                .bounds(x + 100, y, 108, 20).build());
+            this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.import"), b -> chooseImport())
+                .bounds(x + 212, y, 96, 20).build());
             this.deleteButton = this.addRenderableWidget(Button.builder(Component.translatable("selectWorld.delete"), b -> delete())
                 .bounds(x, y + 24, w / 2 - 2, 20).build());
             this.addRenderableWidget(Button.builder(Component.translatable("reprise.browser.folder"), b -> Util.getPlatform().openPath(ReprisePaths.replays()))
@@ -107,6 +109,42 @@ public final class ReplayBrowserScreen extends Screen {
                 join(entry.path);
             }
         }
+    }
+
+    private void chooseImport() {
+        try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            String path = org.lwjgl.util.tinyfd.TinyFileDialogs.tinyfd_openFileDialog(
+                Component.translatable("reprise.browser.import").getString(), "", stack.pointers(stack.UTF8("*.zip")), "Flashback ZIP", false);
+            if (path != null) importRecording(Path.of(path));
+        }
+    }
+
+    @Override
+    public void onFilesDrop(List<Path> files) {
+        if (this.joinFirst == null && files.size() == 1) importRecording(files.getFirst());
+    }
+
+    private void importRecording(Path source) {
+        var client = this.minecraft;
+        var progress = new GenericMessageScreen(Component.translatable("reprise.browser.importing"));
+        client.setScreen(progress);
+        Thread.startVirtualThread(() -> {
+            try {
+                Path imported = com.metrovoc.reprise.format.FlashbackImport.convert(source, ReprisePaths.replays());
+                client.execute(() -> {
+                    if (client.screen == progress) {
+                        this.selectOnOpen = imported;
+                        client.setScreen(this);
+                    }
+                });
+            } catch (Exception e) {
+                Reprise.LOGGER.warn("Could not import {}", source, e);
+                client.execute(() -> {
+                    if (client.screen == progress) client.setScreen(new AlertScreen(() -> client.setScreen(this),
+                        Component.translatable("reprise.browser.import_failed"), Component.literal(String.valueOf(e.getMessage()))));
+                });
+            }
+        });
     }
 
     private void join(Path second) {

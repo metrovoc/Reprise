@@ -567,6 +567,7 @@ public final class ReplaySession {
 
         for (byte[] bytes : config) {
             Packet<? super ClientConfigurationPacketListener> packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
+            if (com.metrovoc.reprise.record.Recorder.liveOnly(packet) || packet instanceof ClientboundFinishConfigurationPacket) continue;
             if (packet instanceof ClientboundCustomPayloadPacket custom
                 && !(custom.payload() instanceof ModdedNetworkQueryPayload)
                 && !(custom.payload() instanceof ModdedNetworkPayload)) {
@@ -603,6 +604,7 @@ public final class ReplaySession {
         // into that dimension would then not switch worlds.
         this.mc.setCameraEntity(null);
         this.mc.player = null;
+        this.cameraPlaced = false;
     }
 
     // Packet delivery.

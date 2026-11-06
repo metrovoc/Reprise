@@ -191,7 +191,7 @@ public final class Recorder {
 
     @SuppressWarnings("unchecked")
     private Packet<? super ClientGamePacketListener> filter(Packet<?> packet) {
-        if (IGNORED.contains(packet.getClass())) {
+        if (liveOnly(packet) || CAPTURED_SEPARATELY.contains(packet.getClass())) {
             return null;
         }
         int selfId = this.minecraft.player == null ? Integer.MIN_VALUE : this.minecraft.player.getId();
@@ -216,10 +216,19 @@ public final class Recorder {
         }
     }
 
-    /** Packets that only make sense to the live player, or that playback rebuilds itself. */
-    private static final Set<Class<?>> IGNORED = Set.of(
+    private static final Set<Class<?>> CAPTURED_SEPARATELY = Set.of(
+        ClientboundCustomPayloadPacket.class, ClientboundSetPlayerInventoryPacket.class, ClientboundSetHeldSlotPacket.class,
+        ClientboundSetHealthPacket.class, ClientboundSetExperiencePacket.class, ClientboundSoundPacket.class, ClientboundSoundEntityPacket.class
+    );
+
+    /** Live connection and local UI instructions must not be delivered by an imported recording. */
+    public static boolean liveOnly(Packet<?> packet) {
+        return LIVE_ONLY.contains(packet.getClass());
+    }
+
+    private static final Set<Class<?>> LIVE_ONLY = Set.of(
         ClientboundKeepAlivePacket.class, ClientboundPingPacket.class, ClientboundDisconnectPacket.class,
-        ClientboundCustomPayloadPacket.class, ClientboundStoreCookiePacket.class, ClientboundCookieRequestPacket.class,
+        ClientboundStoreCookiePacket.class, ClientboundCookieRequestPacket.class,
         ClientboundTransferPacket.class, ClientboundShowDialogPacket.class, ClientboundClearDialogPacket.class,
         ClientboundCustomReportDetailsPacket.class, ClientboundStartConfigurationPacket.class,
         ClientboundChunkBatchStartPacket.class, ClientboundChunkBatchFinishedPacket.class,
@@ -228,8 +237,7 @@ public final class Recorder {
         ClientboundContainerSetContentPacket.class, ClientboundContainerSetSlotPacket.class, ClientboundContainerSetDataPacket.class,
         ClientboundContainerClosePacket.class, ClientboundOpenScreenPacket.class, ClientboundMountScreenOpenPacket.class,
         ClientboundOpenBookPacket.class, ClientboundOpenSignEditorPacket.class, ClientboundMerchantOffersPacket.class,
-        ClientboundSetCursorItemPacket.class, ClientboundSetPlayerInventoryPacket.class, ClientboundSetHeldSlotPacket.class,
-        ClientboundSetHealthPacket.class, ClientboundSetExperiencePacket.class, ClientboundPlayerAbilitiesPacket.class,
+        ClientboundSetCursorItemPacket.class, ClientboundPlayerAbilitiesPacket.class,
         ClientboundCooldownPacket.class, ClientboundPlayerCombatEnterPacket.class, ClientboundPlayerCombatEndPacket.class,
         ClientboundPlayerCombatKillPacket.class, ClientboundAwardStatsPacket.class, ClientboundUpdateAdvancementsPacket.class,
         ClientboundSelectAdvancementsTabPacket.class, ClientboundRecipeBookAddPacket.class, ClientboundRecipeBookRemovePacket.class,

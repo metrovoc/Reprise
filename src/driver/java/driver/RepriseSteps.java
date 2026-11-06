@@ -82,6 +82,7 @@ public final class RepriseSteps {
             }
             throw new IllegalStateException("No field named " + parts[0]);
         });
+        Driver.STEPS.put("drop", (mc, name) -> mc.screen.onFilesDrop(java.util.List.of(mc.gameDirectory.toPath().resolve(name))));
         Driver.STEPS.put("row", (mc, name) -> {
             for (var widget : mc.screen.children()) {
                 if (widget instanceof net.minecraft.client.gui.components.ObjectSelectionList<?> list) {

@@ -23,6 +23,14 @@ counts, selection, food and experience, enable **Record my hotbar and HUD** in t
 before starting a recording. When you spectate the recording player, their items and applicable survival
 HUD appear below the replay timeline.
 
+### Importing from Flashback
+
+Open **Replays → Import ZIP…** or drop a Flashback ZIP onto the replay browser. Reprise creates a separate
+recording that you can seek, edit, clip, and export. The importer reads same-version Minecraft 26.1.2 game
+packets, terrain, recorder and entity movement, snapshot boundaries, and markers. Modded packets still
+require compatible client mods and registries. Mid-segment connection reconfiguration is unsupported.
+Flashback editor projects, optional sub-tick camera samples, and wall-clock timing are outside the import.
+
 ## Watching
 
 Open **Replays** on the title screen and pick a recording to watch. To play two recordings back to back,
