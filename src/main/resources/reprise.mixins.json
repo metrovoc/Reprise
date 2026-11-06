@@ -15,6 +15,7 @@
     "playback.PovCameraMixin",
     "playback.PovHeadMixin",
     "playback.ReplayClockMixin",
+    "playback.ReplayFreezeMixin",
     "playback.ReplayWeatherMixin",
     "playback.PrecipitationMixin",
     "playback.SkyFlashMixin",

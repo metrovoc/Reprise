@@ -1,0 +1,14 @@
+# Pausing a replay freezes recorded players too: their tick count stays put while the camera keeps ticking.
+wait 100
+replay latest
+wait 100
+replay play
+wait 160
+replay pause
+wait 5
+replay recorder_ticks
+shot f01_paused
+wait 60
+replay recorder_ticks
+shot f02_paused_later
+quit

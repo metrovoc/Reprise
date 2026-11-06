@@ -188,6 +188,12 @@ public final class RepriseSteps {
                     LOG.info("[driver] sought to tick {} in {} ms, allocated {} bytes on client thread", target,
                         (System.nanoTime() - start) / 1_000_000, memory.getCurrentThreadAllocatedBytes() - before);
                 }
+                case "recorder_ticks" -> {
+                    // How often the recorded player has ticked; unchanged across a pause when the world is frozen.
+                    var recorder = mc.level.getEntity(s.recorderId());
+                    LOG.info("[driver] recorder tickCount={} walk={} camera tickCount={}", recorder.tickCount,
+                        recorder instanceof net.minecraft.world.entity.LivingEntity l ? l.walkAnimation.position() : 0, mc.player.tickCount);
+                }
                 case "recorder_pos" -> {
                     var recorder = mc.level.getEntity(s.recorderId());
                     var expected = new net.minecraft.world.phys.Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
