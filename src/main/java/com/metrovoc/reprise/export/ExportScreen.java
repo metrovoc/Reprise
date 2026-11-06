@@ -86,6 +86,7 @@ public final class ExportScreen extends Screen {
             () -> this.settings.supersample = !this.settings.supersample)
             .setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.ssaa.tooltip")));
         this.alphaButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            this.session.project().checkpoint();
             this.settings.transparentSky = !this.settings.transparentSky;
             this.session.project().save();
             updateAlpha();
@@ -131,6 +132,7 @@ public final class ExportScreen extends Screen {
 
     private Button cycle(int x, int y, int w, Supplier<Component> label, Runnable next) {
         Button button = Button.builder(label.get(), b -> {
+            this.session.project().checkpoint();
             next.run();
             b.setMessage(label.get());
             this.session.project().save();

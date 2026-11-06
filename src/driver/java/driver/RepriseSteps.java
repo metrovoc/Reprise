@@ -138,6 +138,10 @@ public final class RepriseSteps {
                 }
                 case "editor" -> mc.setScreen(new EditorScreen(s));
                 case "close" -> mc.setScreen(null);
+                case "key_count" -> {
+                    int count = s.project().keyframes.size();
+                    if (count != Integer.parseInt(a[1])) throw new IllegalStateException("Camera key count: " + count);
+                }
                 case "keyframe" -> PlaybackControls.addKeyframe(s);
                 case "preview" -> CameraPath.setPreview(a[1].equals("on"));
                 case "camera" -> {

@@ -147,7 +147,12 @@ public final class ReplaySession {
                 Reprise.LOGGER.warn("Replay {} was recorded on protocol {}, this game is {}", path, file.meta().protocol,
                     net.minecraft.SharedConstants.getProtocolVersion());
             }
-            active = new ReplaySession(file, exitScreen);
+            try {
+                active = new ReplaySession(file, exitScreen);
+            } catch (RuntimeException e) {
+                file.close();
+                throw e;
+            }
             mc.setScreen(new GenericMessageScreen(Component.translatable("reprise.replay.loading")));
             active.playSnapshot(0);
             active.applyResetsAtCurrentTick();

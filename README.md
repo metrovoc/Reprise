@@ -81,7 +81,7 @@ and modded state. That history can include events from before the visible clip.
   Set a solid sky color for chroma key, adjust fog start and end in blocks, tint the fog, or enable night vision.
   Shader packs that draw their own sky can override the solid color.
 - **Names** shows or hides name tags.
-- `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
+- `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo. The last 200 edits stay available when you reopen the replay.
 
 Keyframes and settings are saved with each replay, in `reprise/projects/`.
 

@@ -1,11 +1,15 @@
 package com.metrovoc.reprise.editor;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.ReprisePaths;
 import com.metrovoc.reprise.format.ReplayMeta;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -40,64 +44,99 @@ public final class ReplayProject {
     public ExportSettings export = new ExportSettings();
 
     private transient Path path;
-    private transient final List<String> undo = new ArrayList<>();
-    private transient final List<String> redo = new ArrayList<>();
+    private transient ProjectHistory history = new ProjectHistory();
+    private transient JsonObject beforeEdit;
 
     public static ReplayProject load(ReplayMeta meta) {
-        Path path = ReprisePaths.projects().resolve(meta.uuid + ".json");
-        ReplayProject project = null;
+        return load(ReprisePaths.projects(), meta.uuid);
+    }
+
+    static ReplayProject load(Path directory, String id) {
+        Path filename = Path.of(id + ".json");
+        if (filename.isAbsolute() || filename.getNameCount() != 1) {
+            throw new IllegalArgumentException("Invalid replay project identifier");
+        }
+        Path path = directory.resolve(filename);
+        ReplayProject project = new ReplayProject();
         if (Files.exists(path)) {
             try {
-                project = ReplayMeta.GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), ReplayProject.class);
-            } catch (Exception e) {
-                Reprise.LOGGER.warn("Could not read {}", path, e);
+                JsonObject saved = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
+                project = ReplayMeta.GSON.fromJson(saved, ReplayProject.class);
+                if (saved.has("history")) {
+                    project.history = ReplayMeta.GSON.fromJson(saved.get("history"), ProjectHistory.class);
+                }
+            } catch (RuntimeException | IOException e) {
+                // Opening an unreadable project must never overwrite the user's camera work on exit.
+                throw new IllegalStateException("Could not open replay project " + filename, e);
             }
         }
-        if (project == null) {
-            project = new ReplayProject();
-        }
-        if (project.speedKeys == null) {
-            project.speedKeys = new ArrayList<>();
-        }
-        if (project.export == null) {
-            project.export = new ExportSettings();
-        }
+        if (project.speedKeys == null) project.speedKeys = new ArrayList<>();
+        if (project.export == null) project.export = new ExportSettings();
         project.path = path;
         project.sort();
         return project;
     }
 
+    private JsonObject state() {
+        return ReplayMeta.GSON.toJsonTree(this).getAsJsonObject();
+    }
+
     public void save() {
+        JsonObject state = state();
+        finishEdit(state);
+        state.add("history", ReplayMeta.GSON.toJsonTree(this.history));
         try {
-            Files.writeString(this.path, ReplayMeta.GSON.toJson(this), StandardCharsets.UTF_8);
+            Path temp = Files.createTempFile(this.path.getParent(), ".project-", ".tmp");
+            try {
+                Files.writeString(temp, ReplayMeta.GSON.toJson(state), StandardCharsets.UTF_8);
+                try {
+                    Files.move(temp, this.path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(temp, this.path, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(temp);
+            }
         } catch (IOException e) {
             Reprise.LOGGER.warn("Could not save {}", this.path, e);
         }
     }
 
-    /** Call before every change, so that it can be undone. */
+    /** Begins one undoable edit, committed on save. */
     public void checkpoint() {
-        this.undo.add(ReplayMeta.GSON.toJson(this));
-        if (this.undo.size() > 200) {
-            this.undo.remove(0);
+        JsonObject state = state();
+        finishEdit(state);
+        this.beforeEdit = state;
+    }
+
+    private void finishEdit(JsonObject state) {
+        if (this.beforeEdit != null) {
+            this.history.record(this.beforeEdit, state);
+            this.beforeEdit = null;
         }
-        this.redo.clear();
+    }
+
+    public boolean canUndo() {
+        return this.history.available(false);
+    }
+
+    public boolean canRedo() {
+        return this.history.available(true);
     }
 
     public boolean undo() {
-        return restore(this.undo, this.redo);
+        return restore(false);
     }
 
     public boolean redo() {
-        return restore(this.redo, this.undo);
+        return restore(true);
     }
 
-    private boolean restore(List<String> from, List<String> to) {
-        if (from.isEmpty()) {
-            return false;
-        }
-        to.add(ReplayMeta.GSON.toJson(this));
-        ReplayProject state = ReplayMeta.GSON.fromJson(from.remove(from.size() - 1), ReplayProject.class);
+    private boolean restore(boolean forward) {
+        JsonObject current = state();
+        finishEdit(current);
+        if (!this.history.apply(current, forward)) return false;
+        ReplayProject state = ReplayMeta.GSON.fromJson(current, ReplayProject.class);
         this.environment = state.environment;
         this.hideNames = state.hideNames;
         this.entityOverrides = state.entityOverrides;

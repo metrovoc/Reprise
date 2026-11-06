@@ -44,6 +44,8 @@ public final class EditorScreen extends Screen {
     private Button fewerTurns;
     private Button moreTurns;
     private Button saveClip;
+    private Button undoButton;
+    private Button redoButton;
 
     void addTargetKey(Keyframe.Target target) {
         this.session.setPlaying(false);
@@ -75,10 +77,14 @@ public final class EditorScreen extends Screen {
         orbitPoint.active = this.minecraft.getCameraEntity() == this.minecraft.player;
         addRenderableWidget(Button.builder(Component.translatable("reprise.environment.title"), b ->
             this.minecraft.setScreen(new EnvironmentScreen(this, this.session))).bounds(170, 6, 94, 20).build());
-        this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
+        this.undoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.undo"), b -> restoreEdit(false))
             .bounds(6, 30, 60, 20).build());
-        this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
+        this.redoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.redo"), b -> restoreEdit(true))
             .bounds(68, 30, 60, 20).build());
+        this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
+            .bounds(6, 54, 60, 20).build());
+        this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
+            .bounds(68, 54, 60, 20).build());
         this.saveClip = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.save_clip"), b -> saveClip())
             .bounds(132, 30, 82, 20).tooltip(Tooltip.create(Component.translatable("reprise.editor.save_clip.tooltip"))).build());
         int top = this.height - PANEL_HEIGHT;
@@ -169,6 +175,8 @@ public final class EditorScreen extends Screen {
     }
 
     private void updateLabels() {
+        this.undoButton.active = project().canUndo();
+        this.redoButton.active = project().canRedo();
         this.saveClip.active = project().start() < project().end(this.session.duration());
         this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
@@ -366,6 +374,15 @@ public final class EditorScreen extends Screen {
         return super.mouseReleased(event);
     }
 
+    private void restoreEdit(boolean redo) {
+        if (redo ? project().redo() : project().undo()) {
+            this.selected = null;
+            this.dragging = null;
+            this.session.refreshEnvironment();
+            updateLabels();
+        }
+    }
+
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (RepriseKeys.OPEN_EDITOR.matches(event)) {
@@ -377,16 +394,11 @@ public final class EditorScreen extends Screen {
             return true;
         }
         if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Z) {
-            if (event.hasShiftDown() ? project().redo() : project().undo()) {
-                this.session.refreshEnvironment();
-                this.selected = null;
-            }
+            restoreEdit(event.hasShiftDown());
             return true;
         }
         if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_Y) {
-            project().redo();
-            this.session.refreshEnvironment();
-            this.selected = null;
+            restoreEdit(true);
             return true;
         }
         if (PlaybackControls.handleKey(this.session, event)) {

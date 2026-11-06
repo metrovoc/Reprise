@@ -108,6 +108,8 @@
   "reprise.replay.failed": "This replay could not be opened",
   "reprise.hud.hint": "%s editor · %s play",
   "reprise.hud.spectating": "Spectating %s · sneak to leave",
+  "reprise.editor.undo": "Undo",
+  "reprise.editor.redo": "Redo",
   "reprise.editor.save_clip": "Save replay clip",
   "reprise.editor.save_clip.tooltip": "Save the selected timeline range as a new recording.",
   "reprise.editor.saving_clip": "Saving replay clip…",
