@@ -261,9 +261,12 @@ public final class VideoExporter {
         return this.frame;
     }
 
+    public double shotTick() {
+        return this.schedule.tickAt(Math.min(this.frame, this.totalFrames - 1));
+    }
+
     public float shaderTimeSeconds() {
-        double tick = this.schedule.tickAt(Math.min(this.frame, this.totalFrames - 1));
-        return (float) ((session.project().worldTick(tick) / 20.0) % 3600.0);
+        return (float) ((session.project().worldTick(shotTick()) / 20.0) % 3600.0);
     }
 
     public float frameDurationSeconds() {
@@ -323,7 +326,7 @@ public final class VideoExporter {
         if (!this.session.isPlaying()) {
             this.session.setPlaying(true);
         }
-        double target = this.schedule.tickAt(this.frame);
+        double target = shotTick();
         int needTick = target >= this.session.duration() ? this.session.duration() : (int) target + 1;
         this.session.skipFrozenTicks(needTick);
         int ticks = Math.max(0, needTick - this.session.tick());

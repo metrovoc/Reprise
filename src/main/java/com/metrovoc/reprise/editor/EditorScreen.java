@@ -46,6 +46,7 @@ public final class EditorScreen extends Screen {
     private Button fewerTurns;
     private Button moreTurns;
     private Button saveClip;
+    private Button editKey;
     private Button undoButton;
     private Button redoButton;
 
@@ -86,6 +87,8 @@ public final class EditorScreen extends Screen {
             .bounds(6, 30, 60, 20).build());
         this.redoButton = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.redo"), b -> restoreEdit(true))
             .bounds(68, 30, 60, 20).build());
+        this.editKey = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.edit_key"), b ->
+            minecraft.setScreen(new CameraKeyScreen(this, session, selected))).bounds(6, 78, 122, 20).build());
         this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
             .bounds(6, 54, 60, 20).build());
         this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
@@ -190,6 +193,7 @@ public final class EditorScreen extends Screen {
     }
 
     private void updateLabels() {
+        this.editKey.active = this.selected != null;
         this.undoButton.active = project().canUndo();
         this.redoButton.active = project().canRedo();
         this.saveClip.active = project().worldTick(project().start()) < project().worldTick(project().end(this.session.duration()));
@@ -219,9 +223,7 @@ public final class EditorScreen extends Screen {
     }
 
     private void addKeyframe() {
-        PlaybackControls.addKeyframe(this.session);
-        double tick = this.session.visualTick(0);
-        this.selected = project().keyframes.stream().filter(k -> Math.abs(k.tick - tick) < 0.5).findFirst().orElse(null);
+        this.selected = PlaybackControls.addKeyframe(this.session, null);
     }
 
     private void addSpeedKey() {

@@ -214,7 +214,7 @@ public final class ReplayProject {
     }
 
     public void putCameraKey(Keyframe key) {
-        this.keyframes.removeIf(existing -> existing == key || Math.abs(existing.tick - key.tick) < 0.5);
+        this.keyframes.removeIf(existing -> existing == key || existing.tick == key.tick);
         this.keyframes.add(key);
         sort();
     }

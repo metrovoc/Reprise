@@ -195,7 +195,9 @@ public final class PlaybackControls {
         if (session == null) {
             return;
         }
-        CameraPath.frame(session.visualTick(partialTick), partialTick);
+        var exporter = com.metrovoc.reprise.export.VideoExporter.running();
+        double shotTick = exporter != null && exporter.capturing() ? exporter.shotTick() : session.visualTick(partialTick);
+        CameraPath.frame(shotTick, partialTick);
         CameraController.frame();
         PathPreview.emit(session);
     }
