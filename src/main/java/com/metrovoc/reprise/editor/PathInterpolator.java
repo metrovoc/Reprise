@@ -108,11 +108,23 @@ public final class PathInterpolator {
         double p1 = values != null ? values[1] : g.get(k1);
         double p2 = values != null ? values[2] : g.get(k2);
         double p3 = values != null ? values[3] : g.get(k3);
-        double t0 = k0.tick, t1 = k1.tick, t2 = k2.tick, t3 = k3.tick;
+        if (k0.interpolation == Keyframe.Interpolation.HOLD) {
+            k0 = k1;
+            p0 = p1;
+        }
+        if (k2.interpolation == Keyframe.Interpolation.HOLD) {
+            k3 = k2;
+            p3 = p2;
+        }
+        return timeAwareCubic(s, k0.tick, p0, k1.tick, p1, k2.tick, p2, k3.tick, p3);
+    }
+
+    /** Repeat the nearest endpoint for a one-sided tangent at the start or end of a curve. */
+    static double timeAwareCubic(double s, double t0, double p0, double t1, double p1,
+                                 double t2, double p2, double t3, double p3) {
         double span = t2 - t1;
-        // Tangents in value per tick; one-sided at the ends of the path, and flat next to a HOLD.
-        double m1 = (i == 0 || k0.interpolation == Keyframe.Interpolation.HOLD) ? (p2 - p1) / span : (p2 - p0) / (t2 - t0);
-        double m2 = (i + 2 >= n || k2.interpolation == Keyframe.Interpolation.HOLD) ? (p2 - p1) / span : (p3 - p1) / (t3 - t1);
+        double m1 = (p2 - p0) / (t2 - t0);
+        double m2 = (p3 - p1) / (t3 - t1);
         double s2 = s * s, s3 = s2 * s;
         double h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
         return h00 * p1 + h10 * span * m1 + h01 * p2 + h11 * span * m2;

@@ -1,6 +1,7 @@
 package com.metrovoc.reprise.mixin.export;
 
 import com.metrovoc.reprise.export.VideoExporter;
+import com.metrovoc.reprise.playback.ReplaySession;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.DeltaTracker;
@@ -16,6 +17,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
+    @Inject(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;update(Lnet/minecraft/client/DeltaTracker;)V", shift = At.Shift.AFTER))
+    private void reprise$sampleDaylight(DeltaTracker delta, boolean advanceGameTime, CallbackInfo ci) {
+        var session = ReplaySession.active();
+        if (session != null && advanceGameTime) session.sampleFrameDaylight(delta.getGameTimeDeltaPartialTick(true));
+    }
+
     @Inject(method = {"bobHurt", "bobView"}, at = @At("HEAD"), cancellable = true)
     private void reprise$steadyCubeFaces(CameraRenderState camera, PoseStack poses, CallbackInfo ci) {
         if (camera.isPanoramicMode && VideoExporter.running() != null) ci.cancel();

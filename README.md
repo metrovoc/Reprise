@@ -151,7 +151,11 @@ clip. Clips that fold ticks into the opening snapshot use segment format 2 and r
   are saved with the project and apply to video exports. Hiding a spectated player also hides their first-person hands.
 - **Environment** changes the replay's weather and daylight. Choose recorded weather, clear, overcast, rain, snow,
   or thunderstorm. Set a fixed time from 0 to 23999, or use **Set time key** at several replay ticks for a timelapse.
-  The clock moves forward between keys and wraps through midnight. **Recorded time** restores the original lighting.
+  The default moves forward through midnight. At a key, cycle **To next key** to move linearly between the
+  entered values, ease in or out, follow a smooth curve through neighboring keys, or hold the time until
+  the next key. Linear, eased and smooth segments can run
+  backward or span several days (for example, 6000 to 54000). Keys use the exact cursor position and
+  daylight stays still while the recorded world is frozen. **Recorded time** restores the original lighting.
 - Under **Environment → Scene layers**, show or hide terrain, players, other entities, particles and clouds.
   Set a solid sky color for chroma key, adjust fog start and end in blocks, tint the fog, or enable night vision.
   Shader packs that draw their own sky can override the solid color.

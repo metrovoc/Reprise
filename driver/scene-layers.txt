@@ -32,7 +32,7 @@ wait 180
 pixels solid 30 FF00FF00
 replay editor
 press Environment
-field Time_of_day_(0–23999) 18000
+field Time_of_day_(24000_ticks_per_day) 18000
 press Set fixed time
 press Scene layers
 press Terrain:

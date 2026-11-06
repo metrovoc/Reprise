@@ -7,7 +7,7 @@ replay keyframe
 replay editor
 press Environment
 press Clear
-field Time_of_day_(0–23999) 6000
+field Time_of_day_(24000_ticks_per_day) 6000
 press Set fixed time
 press Done
 replay close
@@ -29,7 +29,7 @@ press Thunderstorm
 wait 4
 replay environment 6000 1 1 rain
 press Snow
-field Time_of_day_(0–23999) 18000
+field Time_of_day_(24000_ticks_per_day) 18000
 press Set fixed time
 press Done
 replay close
@@ -47,17 +47,17 @@ replay seek 0
 replay editor
 press Environment
 press Clear
-field Time_of_day_(0–23999) 6000
+field Time_of_day_(24000_ticks_per_day) 6000
 press Set time key
 press Done
 replay seek 60
 press Environment
-field Time_of_day_(0–23999) 18000
+field Time_of_day_(24000_ticks_per_day) 18000
 press Set time key
 press Done
 replay seek 120
 press Environment
-field Time_of_day_(0–23999) 6000
+field Time_of_day_(24000_ticks_per_day) 6000
 press Set time key
 press Previous key
 wait 3

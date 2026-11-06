@@ -16,7 +16,14 @@ public final class EnvironmentSettings {
             return this != RECORDED && this != THUNDER;
         }
     }
-    public record TimeKey(int tick, int time) {}
+    public enum TimeCurve { FORWARD, LINEAR, EASE_IN, EASE_OUT, EASE, HOLD, SMOOTH }
+    public record TimeKey(double tick, int time, TimeCurve curve) {
+        public TimeKey {
+            if (curve == null) curve = TimeCurve.FORWARD; // Projects saved before curves were editable.
+        }
+
+        public TimeKey(double tick, int time) { this(tick, time, TimeCurve.FORWARD); }
+    }
 
     public enum Layer { TERRAIN, PLAYERS, ENTITIES, PARTICLES, CLOUDS }
     public record Fog(float start, float end, Integer color) {}
@@ -30,14 +37,23 @@ public final class EnvironmentSettings {
     public int fixedTime = 6000;
     public List<TimeKey> keys = new ArrayList<>();
 
-    public void key(int tick, int time) {
+    public TimeKey keyAt(double tick) {
+        return keys.stream().filter(k -> k.tick == tick).findFirst().orElse(null);
+    }
+
+    public void key(double tick, int time) {
+        TimeKey old = keyAt(tick);
+        key(tick, time, old == null ? TimeCurve.FORWARD : old.curve);
+    }
+
+    public void key(double tick, int time, TimeCurve curve) {
         keys.removeIf(k -> k.tick == tick);
-        keys.add(new TimeKey(tick, time));
-        keys.sort(Comparator.comparingInt(TimeKey::tick));
+        keys.add(new TimeKey(tick, time, curve));
+        keys.sort(Comparator.comparingDouble(TimeKey::tick));
         clock = Clock.KEYFRAMED;
     }
 
-    /** Returns -1 for the recorded clock. Keyframed time advances forward through midnight. */
+    /** Returns -1 for the recorded clock. Clock readings wrap at midnight. */
     public double timeAt(double tick) {
         if (clock == Clock.FIXED) {
             return fixedTime;
@@ -56,10 +72,30 @@ public final class EnvironmentSettings {
         }
         TimeKey a = keys.get(low);
         if (tick <= a.tick || low + 1 == keys.size()) {
-            return a.time;
+            return Math.floorMod(a.time, DAY);
         }
         TimeKey b = keys.get(low + 1);
         double progress = (tick - a.tick) / (b.tick - a.tick);
-        return (a.time + progress * Math.floorMod(b.time - a.time, DAY)) % DAY;
+        if (a.curve == TimeCurve.SMOOTH) {
+            TimeKey before = keys.get(Math.max(0, low - 1));
+            if (before.curve == TimeCurve.HOLD) before = a;
+            TimeKey after = b.curve == TimeCurve.HOLD ? b : keys.get(Math.min(keys.size() - 1, low + 2));
+            return wrapTime(PathInterpolator.timeAwareCubic(progress, before.tick, before.time, a.tick, a.time,
+                b.tick, b.time, after.tick, after.time));
+        }
+        double delta = (double) b.time - a.time;
+        switch (a.curve) {
+            case FORWARD -> delta = Math.floorMod((long) b.time - a.time, DAY);
+            case EASE_IN -> progress = progress * progress * progress;
+            case EASE_OUT -> progress = 1 - Math.pow(1 - progress, 3);
+            case EASE -> progress = progress < 0.5 ? 4 * progress * progress * progress : 1 - 4 * Math.pow(1 - progress, 3);
+            case HOLD -> progress = 0;
+            case LINEAR -> { }
+        }
+        return wrapTime(a.time + progress * delta);
+    }
+
+    private static double wrapTime(double time) {
+        return time - DAY * Math.floor(time / DAY);
     }
 }

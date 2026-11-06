@@ -4,6 +4,7 @@ import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.metrovoc.reprise.Reprise;
+import com.metrovoc.reprise.editor.EnvironmentSettings.Clock;
 import com.metrovoc.reprise.editor.EnvironmentSettings.Layer;
 import com.metrovoc.reprise.editor.ReplayProject;
 import com.metrovoc.reprise.format.Actions;
@@ -418,6 +419,7 @@ public final class ReplaySession {
         target = Math.clamp(target, 0, duration());
         seek((int) Math.floor(target));
         pausedCursor = target;
+        sampleFrameDaylight(1);
     }
 
     /** Moves to a whole tick on the shot timeline, keeping the camera where it is. */
@@ -946,10 +948,42 @@ public final class ReplaySession {
         }
     }
 
+    private double sampledDaylight = Double.NaN;
+
+    public double daylightTime() {
+        var settings = project().environment;
+        if (settings.clock == Clock.KEYFRAMED && Double.isFinite(sampledDaylight)) {
+            return sampledDaylight;
+        }
+        return settings.timeAt(recordedTick());
+    }
+
+    /** Vanilla caches timeline attributes and the lightmap for a whole simulation tick. */
+    public void sampleFrameDaylight(float partialTick) {
+        if (project().environment.clock != Clock.KEYFRAMED) return;
+        double time = daylightAtCursor(partialTick);
+        if (time != sampledDaylight) {
+            sampledDaylight = time;
+            refreshLighting();
+        }
+    }
+
+    private double daylightAtCursor(float partialTick) {
+        var job = com.metrovoc.reprise.export.VideoExporter.running();
+        double shot = job != null ? job.shotTick() : visualTick(partialTick);
+        return project().environment.timeAt(project().worldTick(shot));
+    }
+
     public void refreshEnvironment() {
+        sampledDaylight = daylightAtCursor(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
+        refreshLighting();
+    }
+
+    private void refreshLighting() {
         if (this.mc.level != null) {
             this.mc.level.environmentAttributes().invalidateTickCache();
             this.mc.level.updateSkyBrightness();
+            this.mc.gameRenderer.lightmapRenderStateExtractor.needsUpdate = true;
             var camera = this.mc.gameRenderer.getMainCamera();
             camera.attributeProbe().reset();
             camera.attributeProbe().tick(this.mc.level, camera.position());
