@@ -3,6 +3,7 @@ package com.metrovoc.reprise.playback;
 import com.metrovoc.reprise.editor.CameraPose;
 import com.metrovoc.reprise.editor.EditorScreen;
 import com.metrovoc.reprise.editor.Keyframe;
+import com.metrovoc.reprise.editor.OrbitInterpolator;
 import com.metrovoc.reprise.editor.PathInterpolator;
 import com.metrovoc.reprise.export.VideoExporter;
 import java.util.List;
@@ -23,20 +24,34 @@ public final class PathPreview {
         if (keys.isEmpty() || VideoExporter.isRunning() || !(mc.screen instanceof EditorScreen) || mc.player == null) {
             return;
         }
+        float partial = session.isPlaying() ? mc.getDeltaTracker().getGameTimeDeltaPartialTick(false) : 1;
+        boolean tracked = keys.stream().anyMatch(key -> key.target != null);
         double eye = mc.player.getEyeHeight();
-        double first = keys.get(0).tick, last = keys.get(keys.size() - 1).tick;
-        // About two samples per tick, but never more than 2000 segments.
-        double step = Math.max(0.5, (last - first) / 2000.0);
-        Vec3 prev = null;
-        for (double t = first; t <= last + 1e-6; t += step) {
-            CameraPose p = PathInterpolator.evaluate(keys, Math.min(t, last));
-            Vec3 pos = new Vec3(p.x(), p.y() + eye, p.z());
-            if (prev != null) {
-                Gizmos.line(prev, pos, PATH, 2.0F);
+        // Sampling follows the shape of the shot. A long straight move needs just its endpoints.
+        int perSegment = Math.max(1, 2000 / Math.max(1, keys.size() - 1));
+        for (int i = 0; i + 1 < keys.size(); i++) {
+            Keyframe a = keys.get(i), b = keys.get(i + 1);
+            if (a.interpolation == Keyframe.Interpolation.HOLD) {
+                continue;
             }
-            prev = pos;
+            int samples = a.interpolation == Keyframe.Interpolation.SMOOTH ? 32 : 1;
+            if (OrbitInterpolator.sameOrbit(a, b)) {
+                samples = (int) Math.min(perSegment, 32 + 48L * Math.abs((long) a.turns));
+            }
+            samples = Math.min(samples, perSegment);
+            Vec3 previous = null;
+            for (int j = 0; j <= samples; j++) {
+                double t = a.tick + (b.tick - a.tick) * j / samples;
+                CameraPose p = tracked ? CameraPath.evaluate(keys, t, partial) : PathInterpolator.evaluate(keys, t);
+                Vec3 pos = new Vec3(p.x(), p.y() + eye, p.z());
+                if (previous != null) {
+                    Gizmos.line(previous, pos, PATH, 2.0F);
+                }
+                previous = pos;
+            }
         }
-        for (Keyframe k : keys) {
+        for (Keyframe key : keys) {
+            Keyframe k = CameraPath.resolve(key, partial);
             Vec3 pos = new Vec3(k.x, k.y + eye, k.z);
             Gizmos.point(pos, KEY, 8.0F);
             Gizmos.arrow(pos, pos.add(look(k.yaw, k.pitch)), LOOK, 2.0F);

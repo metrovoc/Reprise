@@ -1,0 +1,20 @@
+world
+gui 2
+cmd gamerule spawn_mobs false
+cmd time set noon
+cmd gamerule send_command_feedback false
+cmd fill -10 -60 25 10 -58 25 minecraft:gold_block
+cmd tp @s -6 -60 5 180 0
+wait 20
+cmd summon armor_stand -3 -60 8 {UUID:[I;12,34,56,78],NoGravity:1b}
+wait 5
+record start
+wait 25
+cmd kill @e[type=armor_stand]
+cmd tp @s 0 -60 5 180 0
+wait 30
+cmd summon armor_stand 6 -60 8 {UUID:[I;12,34,56,78],NoGravity:1b}
+cmd tp @s 6 -60 5 180 0
+wait 35
+record stop
+quit

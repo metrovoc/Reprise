@@ -11,6 +11,19 @@ import java.util.List;
 public final class PathInterpolator {
     private PathInterpolator() {}
 
+    public static int segmentAt(List<Keyframe> keys, double tick) {
+        int low = 0, high = keys.size() - 1;
+        while (low < high) {
+            int mid = (low + high + 1) >>> 1;
+            if (keys.get(mid).tick <= tick) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low;
+    }
+
     public static CameraPose evaluate(List<Keyframe> keys, double tick) {
         int n = keys.size();
         if (n == 0) {
@@ -22,10 +35,7 @@ public final class PathInterpolator {
         if (tick >= keys.get(n - 1).tick) {
             return pose(keys.get(n - 1));
         }
-        int i = 0;
-        while (i < n - 2 && keys.get(i + 1).tick <= tick) {
-            i++;
-        }
+        int i = segmentAt(keys, tick);
         Keyframe a = keys.get(i), b = keys.get(i + 1);
         double span = b.tick - a.tick;
         double s = span <= 0 ? 1 : (tick - a.tick) / span;
@@ -73,7 +83,7 @@ public final class PathInterpolator {
         return out;
     }
 
-    private static double wrap(double degrees) {
+    static double wrap(double degrees) {
         degrees %= 360;
         if (degrees >= 180) {
             degrees -= 360;

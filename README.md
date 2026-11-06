@@ -51,8 +51,16 @@ The editor (`Tab`) puts a timeline under the live world. The movement keys still
   - *Linear*: straight lines;
   - *Ease*: starts and stops gently;
   - *Hold*: stays put, then cuts.
-- **Path: On** plays the replay along the keyframed path. The path itself is drawn in the world while the editor is
-  open.
+- For a moving subject, frame the shot with the free camera, open **Entities**, select the subject and choose eyes,
+  center or feet. **Aim keyframe** pans from the camera path to keep that point in frame. **Follow keyframe** also
+  carries the camera with the subject. Two **Orbit keyframes** around the same subject and target point move the
+  camera along an arc. Select the first orbit key and use **+1 turn** or **−1 turn** for extra revolutions.
+  If the subject leaves the loaded world, preview and export use the camera poses stored in the keys.
+- For an orbit around scenery, point the free camera at a block and choose **Orbit point…** in the editor.
+  You can enter exact world coordinates or use the aimed block's center. Add a second orbit key at another time;
+  keeping the center fixed circles the same landmark, and changing it moves the center during the shot.
+- **Path: On** previews the shot while playing or scrubbing. Switch it off to fly the camera freely. The editor draws the path
+  against the subjects at the current replay time.
 - **Speed** keys make slow motion and timelapses: set a speed with `−`/`+`, press *Speed*, and from that moment the
   preview and the export run at that speed. Between two keys the speed changes linearly. Right-click a speed key to remove
   it.

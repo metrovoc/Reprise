@@ -1,0 +1,88 @@
+# Run after record-tracking.txt on a fresh project.
+replay latest
+wait 60
+replay seek 0
+replay camera 0 -60 -5 0 0
+replay editor
+press Entities
+row Dev
+wait 2
+field Outline_color_(hex) FF00FF
+press Outline
+press Aim keyframe
+press Path: Off
+replay close
+replay play
+wait 70
+replay pause
+replay aimed Dev eyes
+shot tracking_preview
+replay seek 0
+replay export 640 360 30 PNG_SEQUENCE
+wait 180
+replay preview off
+replay seek 0
+replay camera 0 -60 -5 0 0
+replay editor
+press Entities
+row Dev
+wait 2
+press Follow keyframe
+replay exit
+wait 25
+replay latest
+wait 45
+replay export 640 360 30 PNG_SEQUENCE
+wait 180
+replay preview off
+replay seek 0
+replay camera 0 -60 -5 0 0
+replay editor
+press Entities
+row Dev
+wait 2
+press Orbit keyframe
+press +1 turn
+replay seek 90
+replay camera 12 -60 -5 0 0
+press Entities
+row Dev
+wait 2
+press Orbit keyframe
+replay preview on
+replay seek 45
+wait 6
+replay aimed Dev eyes
+shot orbit_half
+replay seek 22
+wait 6
+replay aimed Dev eyes
+shot orbit_quarter
+replay close
+replay export 640 360 30 PNG_SEQUENCE
+wait 180
+replay preview off
+replay seek 0
+replay clear
+replay camera 0 -60 -5 0 0
+replay editor
+press Entities
+row Armor Stand
+wait 2
+press Target: Eyes
+press Target: Center
+press Aim keyframe
+replay preview on
+replay close
+wait 5
+replay aimed Armor_Stand feet
+replay seek 43
+wait 6
+replay fallback
+replay seek 80
+wait 6
+replay aimed Armor_Stand feet
+replay seek 0
+wait 6
+replay aimed Armor_Stand feet
+quit

@@ -154,7 +154,7 @@ public final class PlaybackControls {
         if (session == null) {
             return;
         }
-        CameraPath.frame(session.visualTick(partialTick));
+        CameraPath.frame(session.visualTick(partialTick), partialTick);
         CameraController.frame();
         PathPreview.emit(session);
     }
@@ -210,10 +210,14 @@ public final class PlaybackControls {
 
     /** Keyframes the camera where it is now. A keyframe already at this moment is replaced. */
     public static void addKeyframe(ReplaySession session) {
+        addKeyframe(session, null);
+    }
+
+    public static Keyframe addKeyframe(ReplaySession session, Keyframe.Target target) {
         Minecraft mc = Minecraft.getInstance();
         Entity view = mc.getCameraEntity();
         if (view == null) {
-            return;
+            return null;
         }
         ReplayProject project = session.project();
         project.checkpoint();
@@ -221,6 +225,7 @@ public final class PlaybackControls {
         project.keyframes.removeIf(k -> Math.abs(k.tick - tick) < 0.5);
         Keyframe k = new Keyframe();
         k.tick = Math.round(tick);
+        k.target = target;
         // Keyframes store the camera player's position; when spectating, take the spectated entity's eyes.
         double eyeOffset = view == mc.player ? 0 : view.getEyeHeight() - mc.player.getEyeHeight();
         k.x = view.getX();
@@ -230,10 +235,17 @@ public final class PlaybackControls {
         k.pitch = view.getXRot();
         k.roll = view == mc.player ? CameraController.roll() : 0;
         k.fov = mc.options.fov().get();
+        if (target != null) {
+            var fallback = new com.metrovoc.reprise.editor.CameraPose(k.x, k.y, k.z, k.yaw, k.pitch, k.roll, k.fov)
+                .aimAt(target.x(), target.y(), target.z(), mc.player.getEyeHeight());
+            k.yaw = fallback.yaw();
+            k.pitch = fallback.pitch();
+        }
         project.keyframes.add(k);
         project.sort();
         project.save();
         mc.gui.setOverlayMessage(Component.translatable("reprise.editor.keyframe.added", Timecode.precise(k.tick)), false);
+        return k;
     }
 
     private static void hud(GuiGraphicsExtractor g, float partialTick) {

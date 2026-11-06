@@ -13,6 +13,18 @@ public final class Keyframe {
         HOLD
     }
 
+    public enum Tracking { AIM, FOLLOW, ORBIT }
+    public enum AimPoint { EYES, CENTER, FEET }
+    /** The authored anchor in world coordinates. A null ID targets a fixed point. */
+    public record Target(java.util.UUID id, String name, Tracking mode, AimPoint point, double x, double y, double z) {
+        public boolean sameSubject(Target other) {
+            return other != null && java.util.Objects.equals(id, other.id) && point == other.point;
+        }
+    }
+    public Target target;
+    /** Extra full revolutions from this orbit key to the next. */
+    public int turns;
+
     /** Replay time in ticks; fractional ticks are allowed. */
     public double tick;
     public double x, y, z;
@@ -23,6 +35,8 @@ public final class Keyframe {
 
     public Keyframe copy() {
         Keyframe k = new Keyframe();
+        k.target = this.target;
+        k.turns = this.turns;
         k.tick = this.tick;
         k.x = this.x;
         k.y = this.y;

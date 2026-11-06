@@ -77,7 +77,8 @@ public final class Timeline {
         int mid = (trackTop + trackBottom) / 2;
         for (Keyframe k : project.keyframes) {
             int kx = xOf(k.tick, duration);
-            diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : KEYFRAME, k.interpolation == Keyframe.Interpolation.HOLD);
+            int color = k.target == null ? KEYFRAME : 0xFF9DDA80;
+            diamond(g, kx, mid, k == selected ? KEYFRAME_SELECTED : color, k.interpolation == Keyframe.Interpolation.HOLD);
         }
         for (com.metrovoc.reprise.editor.SpeedKey key : project.speedKeys) {
             int sx = xOf(key.tick, duration);

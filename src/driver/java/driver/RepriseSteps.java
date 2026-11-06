@@ -117,6 +117,33 @@ public final class RepriseSteps {
                 }
                 case "dump" -> s.dump(Integer.parseInt(a[1]), Integer.parseInt(a[2]));
                 case "exit" -> s.exit();
+                case "camera_at" -> {
+                    var expected = new net.minecraft.world.phys.Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
+                    if (mc.player.position().distanceTo(expected) > 0.025) {
+                        throw new IllegalStateException("Expected camera at " + expected + ", found " + mc.player.position());
+                    }
+                }
+                case "aimed" -> {
+                    var actor = java.util.stream.StreamSupport.stream(mc.level.entitiesForRendering().spliterator(), false)
+                        .filter(e -> e != mc.player && e.getName().getString().equals(a[1].replace('_', ' '))).findFirst().orElseThrow();
+                    double height = switch (a[2]) {
+                        case "eyes" -> actor.getEyeHeight();
+                        case "center" -> actor.getBbHeight() * 0.5;
+                        case "feet" -> 0;
+                        default -> throw new IllegalArgumentException(arg);
+                    };
+                    var direction = actor.position().add(0, height, 0).subtract(mc.player.getEyePosition()).normalize();
+                    if (direction.dot(mc.player.getLookAngle()) < 0.9999) {
+                        throw new IllegalStateException("Camera missed " + actor.getName().getString() + " at tick " + s.tick());
+                    }
+                }
+                case "fallback" -> {
+                    var key = s.project().keyframes.getFirst();
+                    if (mc.level.getEntity(key.target.id()) != null || mc.player.position().distanceToSqr(key.x, key.y, key.z) > 1e-6
+                        || Math.abs(mc.player.getYRot() - key.yaw) > 0.01 || Math.abs(mc.player.getXRot() - key.pitch) > 0.01) {
+                        throw new IllegalStateException("Missing-subject fallback differs from authored pose");
+                    }
+                }
                 case "appearance" -> {
                     Entity target = java.util.stream.StreamSupport.stream(mc.level.entitiesForRendering().spliterator(), false)
                         .filter(e -> e != mc.player && e.getName().getString().equals(a[1])).findFirst().orElseThrow();

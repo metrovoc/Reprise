@@ -37,6 +37,20 @@ public final class EditorScreen extends Screen {
     private Button pathButton;
     private Button interpolationButton;
     private Button namesButton;
+    private Button fewerTurns;
+    private Button moreTurns;
+
+    void addTargetKey(Keyframe.Target target) {
+        this.session.setPlaying(false);
+        this.selected = PlaybackControls.addKeyframe(this.session, target);
+        CameraPath.apply(CameraPath.evaluate(project().keyframes, this.session.tick(), 1));
+    }
+
+    private void changeTurns(int change) {
+        project().checkpoint();
+        this.selected.turns += change;
+        project().save();
+    }
 
     public EditorScreen(ReplaySession session) {
         super(Component.translatable("reprise.editor.title"));
@@ -51,6 +65,13 @@ public final class EditorScreen extends Screen {
     protected void init() {
         addRenderableWidget(Button.builder(Component.translatable("reprise.entities.title"), b ->
             this.minecraft.setScreen(new EntityScreen(this, this.session))).bounds(6, 6, 72, 20).build());
+        Button orbitPoint = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.orbit_point"), b ->
+            this.minecraft.setScreen(new OrbitPointScreen(this, this.session))).bounds(82, 6, 84, 20).build());
+        orbitPoint.active = this.minecraft.getCameraEntity() == this.minecraft.player;
+        this.fewerTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.fewer_turns"), b -> changeTurns(-1))
+            .bounds(170, 6, 60, 20).build());
+        this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
+            .bounds(232, 6, 60, 20).build());
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
@@ -118,6 +139,8 @@ public final class EditorScreen extends Screen {
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));
         this.namesButton.setMessage(Component.translatable(project().hideNames ? "reprise.editor.names.off" : "reprise.editor.names.on"));
+        this.fewerTurns.visible = this.moreTurns.visible = this.selected != null && this.selected.target != null
+            && this.selected.target.mode() == Keyframe.Tracking.ORBIT;
         this.interpolationButton.active = this.selected != null;
         this.interpolationButton.setMessage(Component.translatable("reprise.interpolation." +
             (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));
@@ -200,6 +223,15 @@ public final class EditorScreen extends Screen {
         g.text(this.font, time, this.width - 10 - this.font.width(time), top + INFO_Y, 0xFFFFFFFF);
         if (this.selected != null) {
             String info = Component.translatable("reprise.editor.selected", Timecode.precise(this.selected.tick)).getString();
+            if (this.selected.target != null) {
+                String kind = switch (this.selected.target.mode()) {
+                    case AIM -> "aim";
+                    case FOLLOW -> "follow";
+                    case ORBIT -> "orbit";
+                };
+                info = Component.translatable("reprise.editor.target." + kind, this.selected.target.name(),
+                    Timecode.precise(this.selected.tick), this.selected.turns).getString();
+            }
             g.text(this.font, info, 10, top + INFO_Y, 0xFFFFC94D);
         }
         if (this.timeline.contains(mouseX, mouseY)) {
@@ -250,7 +282,7 @@ public final class EditorScreen extends Screen {
             this.selected = hit;
             if (doubleClick) {
                 this.session.seek((int) Math.round(hit.tick));
-                CameraPath.apply(new CameraPose(hit.x, hit.y, hit.z, hit.yaw, hit.pitch, hit.roll, hit.fov));
+                CameraPath.apply(CameraPath.evaluate(project().keyframes, hit.tick, 1));
                 CameraController.setRoll(hit.roll);
             } else {
                 project().checkpoint();

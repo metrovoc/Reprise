@@ -1,0 +1,39 @@
+replay latest
+wait 60
+replay clear
+replay seek 0
+replay camera 0 -60 -5 0 0
+replay editor
+press Orbit point
+press Use aimed block
+field X 0
+field Y -58.38
+field Z 5
+press Orbit keyframe
+replay seek 90
+replay camera 18 -60 5 90 0
+press Orbit point
+field X 8
+press Orbit keyframe
+replay preview on
+replay seek 45
+wait 10
+replay camera_at 11.071 -60 -2.071
+shot orbit_point_mid
+replay seek 0
+wait 5
+replay camera_at 0 -60 -5
+replay seek 90
+wait 5
+replay camera_at 18 -60 5
+replay exit
+wait 30
+replay latest
+wait 60
+replay preview on
+replay seek 45
+wait 8
+replay camera_at 11.071 -60 -2.071
+replay export 640 360 30 PNG_SEQUENCE
+wait 180
+quit

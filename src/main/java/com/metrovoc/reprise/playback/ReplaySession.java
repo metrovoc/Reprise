@@ -167,6 +167,7 @@ public final class ReplaySession {
             return;
         }
         active = null;
+        CameraPath.setPreview(false);
         this.project.save();
         try {
             this.file.close();

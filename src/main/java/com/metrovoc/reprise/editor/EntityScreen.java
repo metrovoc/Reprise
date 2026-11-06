@@ -1,9 +1,10 @@
 package com.metrovoc.reprise.editor;
 
 import com.metrovoc.reprise.editor.ReplayProject.EntityOverride;
+import com.metrovoc.reprise.playback.CameraPath;
 import com.metrovoc.reprise.playback.ReplaySession;
-import java.util.Locale;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
@@ -16,18 +17,22 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
 final class EntityScreen extends Screen {
-    private final Screen parent;
+    private final EditorScreen parent;
     private final ReplaySession session;
     private EntityList list;
     private Button visibility;
     private Button outline;
     private Button spectate;
+    private Keyframe.AimPoint point = Keyframe.AimPoint.EYES;
+    private Button aimKey;
+    private Button followKey;
+    private Button orbitKey;
     private EditBox color;
     private EditBox nameTag;
     private Button applyName;
     private Entry editing;
 
-    EntityScreen(Screen parent, ReplaySession session) {
+    EntityScreen(EditorScreen parent, ReplaySession session) {
         super(Component.translatable("reprise.entities.title"));
         this.parent = parent;
         this.session = session;
@@ -52,6 +57,21 @@ final class EntityScreen extends Screen {
             update();
         });
         populate(names, "");
+
+        int keyWidth = Math.min(90, (this.width - 16) / 4);
+        int keyX = (this.width - keyWidth * 4 - 6) / 2;
+        addRenderableWidget(Button.builder(pointLabel(), button -> {
+            var points = Keyframe.AimPoint.values();
+            this.point = points[(this.point.ordinal() + 1) % points.length];
+            button.setMessage(pointLabel());
+        }).bounds(keyX, this.height - 98, keyWidth, 20).build());
+        this.aimKey = addRenderableWidget(Button.builder(Component.translatable("reprise.entities.aim_key"), b -> track(Keyframe.Tracking.AIM))
+            .bounds(keyX + keyWidth + 2, this.height - 98, keyWidth, 20).build());
+        this.followKey = addRenderableWidget(Button.builder(Component.translatable("reprise.entities.follow_key"), b -> track(Keyframe.Tracking.FOLLOW))
+            .bounds(keyX + 2 * (keyWidth + 2), this.height - 98, keyWidth, 20).build());
+
+        this.orbitKey = addRenderableWidget(Button.builder(Component.translatable("reprise.entities.orbit_key"), b -> track(Keyframe.Tracking.ORBIT))
+            .bounds(keyX + 3 * (keyWidth + 2), this.height - 98, keyWidth, 20).build());
 
         Component nameLabel = Component.translatable("reprise.entities.name_tag");
         this.nameTag = addRenderableWidget(new EditBox(this.font, this.width / 2 - 112, this.height - 73, 144, 18, nameLabel));
@@ -100,6 +120,22 @@ final class EntityScreen extends Screen {
         return state == null || state.label() == null ? name : name + " · " + state.label();
     }
 
+    private Component pointLabel() {
+        return Component.translatable("reprise.entities.point." + this.point.name().toLowerCase(Locale.ROOT));
+    }
+
+    private void track(Keyframe.Tracking mode) {
+        Entity subject = this.minecraft.level.getEntity(this.list.getSelected().id);
+        if (subject == null || this.minecraft.getCameraEntity() != this.minecraft.player) {
+            return;
+        }
+        this.session.setPlaying(false);
+        var anchor = CameraPath.anchor(subject, this.point, 1);
+        var target = new Keyframe.Target(subject.getUUID(), subject.getName().getString(), mode, this.point, anchor.x, anchor.y, anchor.z);
+        this.parent.addTargetKey(target);
+        onClose();
+    }
+
     private void toggleHidden() {
         Entry entry = this.list.getSelected();
         EntityOverride state = entry.override();
@@ -133,6 +169,7 @@ final class EntityScreen extends Screen {
     public void tick() {
         Entry entry = this.list.getSelected();
         this.spectate.active = entry != null && this.minecraft.level.getEntity(entry.id) != null;
+        this.aimKey.active = this.followKey.active = this.orbitKey.active = this.spectate.active && this.minecraft.getCameraEntity() == this.minecraft.player;
     }
 
     private void update() {
@@ -151,6 +188,7 @@ final class EntityScreen extends Screen {
         this.visibility.active = entry != null;
         this.outline.active = entry != null && selectedColor() != null;
         this.spectate.active = entry != null && this.minecraft.level.getEntity(entry.id) != null;
+        this.aimKey.active = this.followKey.active = this.orbitKey.active = this.spectate.active && this.minecraft.getCameraEntity() == this.minecraft.player;
         this.visibility.setMessage(Component.translatable(state != null && state.hidden() ? "reprise.entities.show" : "reprise.entities.hide"));
         String action = outlineColor == null ? "outline" : outlineColor.equals(selectedColor()) ? "clear_outline" : "apply_color";
         this.outline.setMessage(Component.translatable("reprise.entities." + action));
@@ -171,7 +209,7 @@ final class EntityScreen extends Screen {
 
     private final class EntityList extends ObjectSelectionList<Entry> {
         EntityList(Minecraft mc) {
-            super(mc, EntityScreen.this.width, EntityScreen.this.height - 131, 47, 28);
+            super(mc, EntityScreen.this.width, EntityScreen.this.height - 155, 47, 28);
         }
 
         @Override
