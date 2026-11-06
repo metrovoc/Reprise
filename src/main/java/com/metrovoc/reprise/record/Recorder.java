@@ -247,9 +247,7 @@ public final class Recorder {
         ClientboundDeleteChatPacket.class, ClientboundTagQueryPacket.class, ClientboundServerDataPacket.class,
         ClientboundDebugBlockValuePacket.class, ClientboundDebugChunkValuePacket.class, ClientboundDebugEntityValuePacket.class,
         ClientboundDebugEventPacket.class, ClientboundDebugSamplePacket.class, ClientboundGameTestHighlightPosPacket.class,
-        ClientboundTestInstanceBlockStatus.class, ClientboundLowDiskSpaceWarningPacket.class, ClientboundGameRuleValuesPacket.class,
-        // Recorded where the client plays them, which covers the player's own sounds too.
-        ClientboundSoundPacket.class, ClientboundSoundEntityPacket.class
+        ClientboundTestInstanceBlockStatus.class, ClientboundLowDiskSpaceWarningPacket.class, ClientboundGameRuleValuesPacket.class
     );
 
     /** Called before a registered handler consumes its payload, possibly on the network thread. */
