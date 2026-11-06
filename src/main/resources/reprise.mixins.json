@@ -32,6 +32,7 @@
     "export.IrisFrameCounterMixin",
     "export.GameRendererMixin",
     "playback.RenderSectionMixin",
+    "playback.TerrainUploadMixin",
     "playback.LevelChunkMixin",
     "playback.EntityVisibilityMixin",
     "playback.HandRenderingMixin",
