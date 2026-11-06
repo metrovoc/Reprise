@@ -58,6 +58,9 @@ import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.network.payload.ModdedNetworkPayload;
+import net.neoforged.neoforge.network.payload.ModdedNetworkQueryPayload;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 
 /**
  * Plays a replay into the vanilla client. The client believes it is connected to a server: packets from the file are
@@ -525,13 +528,18 @@ public final class ReplaySession {
 
         for (byte[] bytes : config) {
             Packet<? super ClientConfigurationPacketListener> packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
+            if (packet instanceof ClientboundCustomPayloadPacket custom
+                && !(custom.payload() instanceof ModdedNetworkQueryPayload)
+                && !(custom.payload() instanceof ModdedNetworkPayload)) {
+                continue;
+            }
             deliver(packet, this.configListener);
         }
         deliver(ClientboundFinishConfigurationPacket.INSTANCE, this.configListener);
         if (!(this.connection.getPacketListener() instanceof ClientPacketListener play)) {
             throw new IllegalStateException("Replay did not reach the play phase");
         }
-        this.gameCodec = PacketCodecs.game(play.registryAccess(), this.connectionType);
+        this.gameCodec = PacketCodecs.game(play.registryAccess(), this.meta.snapshotConnectionType ? play.getConnectionType() : this.connectionType);
         this.cameraPlaced = false;
     }
 

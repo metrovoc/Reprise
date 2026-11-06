@@ -35,7 +35,7 @@ public final class Recorder {
     /** Segments are cut at this length so that a seek never has to fast-forward more than one segment. */
     public static final int SEGMENT_TICKS = Integer.getInteger("reprise.segmentTicks", 20 * 60 * 5);
 
-    private static Recorder active;
+    private static volatile Recorder active;
 
     private final Minecraft minecraft = Minecraft.getInstance();
     private final ReplayMeta meta = new ReplayMeta();
@@ -62,6 +62,7 @@ public final class Recorder {
         this.meta.mcVersion = SharedConstants.getCurrentVersion().name();
         this.meta.protocol = SharedConstants.getProtocolVersion();
         this.meta.dataVersion = SharedConstants.getCurrentVersion().dataVersion().version();
+        this.meta.snapshotConnectionType = true;
         this.meta.neoforgeConnection = this.connectionType == ConnectionType.NEOFORGE;
         this.meta.singleplayer = this.minecraft.isLocalServer();
         if (this.minecraft.getSingleplayerServer() != null) {
@@ -132,6 +133,7 @@ public final class Recorder {
     public void setPaused(boolean paused) {
         if (this.paused && !paused) {
             this.snapshotPending = true;
+            this.resetPending = true;
         }
         this.paused = paused;
     }
@@ -162,10 +164,8 @@ public final class Recorder {
             this.snapshotPending = true;
             this.resetPending = true;
         }
-        if (packet instanceof ClientboundBundlePacket bundle) {
-            for (Packet<? super ClientGamePacketListener> sub : bundle.subPackets()) {
-                onPacket(sub, listener);
-            }
+        // Bundle members are observed individually as the listener applies them.
+        if (packet instanceof ClientboundBundlePacket) {
             return;
         }
         this.spawnData.observe(packet);
@@ -236,6 +236,34 @@ public final class Recorder {
         ClientboundSoundPacket.class, ClientboundSoundEntityPacket.class
     );
 
+    /** Called before a registered handler consumes its payload, possibly on the network thread. */
+    public void capturePayload(ClientPacketListener listener, ClientboundCustomPayloadPacket packet) {
+        if (!ReplayPayloads.records(packet.payload())) {
+            return;
+        }
+        byte[] bytes;
+        try {
+            // The connection has already bound this codec to the live registries and negotiated connection type.
+            @SuppressWarnings("unchecked")
+            var protocol = (net.minecraft.network.ProtocolInfo<ClientGamePacketListener>) listener.getConnection().getInboundProtocol();
+            bytes = PacketCodecs.encode(protocol.codec(), packet);
+        } catch (RuntimeException e) {
+            Reprise.LOGGER.warn("Could not record payload {}", packet.payload().type().id(), e);
+            return;
+        }
+        Runnable append = () -> {
+            if (active == this && this.minecraft.getConnection() == listener && !this.snapshotPending && !this.paused && !this.configuring) {
+                this.writer.submit(w -> w.gamePacket(bytes));
+            }
+        };
+        var processor = listener.getPacketProcessor();
+        if (processor.isSameThread()) {
+            append.run();
+        } else {
+            processor.scheduleIfPossible(append);
+        }
+    }
+
     // Writing; all on the game thread, the writer only sees bytes.
 
     void writeGame(Packet<? super ClientGamePacketListener> packet) {
@@ -287,20 +315,24 @@ public final class Recorder {
             return;
         }
         if (this.snapshotPending) {
-            boolean reset = this.resetPending || this.meta.segments.isEmpty();
-            this.snapshotPending = false;
-            this.resetPending = false;
-            this.segmentTicks = 0;
-            this.writer.submit(w -> w.beginSegment(reset));
-            SnapshotBuilder.write(this, this.minecraft, this.spawnData, this.self::spawn);
-            this.writer.submit(ReplayWriter::snapshotEnd);
+            beginSegment(this.resetPending || this.recordedTicks == 0);
             return;
         }
         this.self.tick();
         this.writer.submit(ReplayWriter::tick);
         this.recordedTicks++;
         if (++this.segmentTicks >= SEGMENT_TICKS) {
-            this.snapshotPending = true;
+            beginSegment(false);
         }
+    }
+
+    /** Cut between ticks, before any packets for the next tick have been applied. */
+    private void beginSegment(boolean reset) {
+        this.snapshotPending = false;
+        this.resetPending = false;
+        this.segmentTicks = 0;
+        this.writer.submit(w -> w.beginSegment(reset));
+        SnapshotBuilder.write(this, this.minecraft, this.spawnData, this.self::spawn);
+        this.writer.submit(ReplayWriter::snapshotEnd);
     }
 }

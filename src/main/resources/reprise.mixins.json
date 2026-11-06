@@ -5,6 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "record.ListenerAndPacketMixin",
+    "record.AuxiliaryLightAccessor",
+    "record.BundleMixin",
+    "record.ModPayloadMixin",
     "record.ClientLevelMixin",
     "playback.MinecraftMixin",
     "playback.LocalPlayerMixin",

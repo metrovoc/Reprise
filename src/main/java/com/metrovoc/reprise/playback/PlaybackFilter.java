@@ -16,6 +16,9 @@ final class PlaybackFilter {
     Packet<? super ClientGamePacketListener> apply(Packet<? super ClientGamePacketListener> packet) {
         boolean fast = this.session.isFastForwarding();
         switch (packet) {
+            case net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom -> {
+                return com.metrovoc.reprise.record.ReplayPayloads.records(custom.payload()) ? packet : null;
+            }
             case ClientboundLoginPacket login -> {
                 this.session.setRecorderId(login.playerId());
                 return new ClientboundLoginPacket(ReplaySession.CAMERA_ID, login.hardcore(), login.levels(), login.maxPlayers(),

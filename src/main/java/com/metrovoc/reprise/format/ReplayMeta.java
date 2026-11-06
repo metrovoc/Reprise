@@ -20,6 +20,8 @@ public final class ReplayMeta {
     public int protocol;
     public int dataVersion;
     public boolean neoforgeConnection;
+    /** Each snapshot carries its own channel negotiation. Older archives use neoforgeConnection throughout. */
+    public boolean snapshotConnectionType;
     public long recordedAt;
     public int durationTicks;
     public String server = "";

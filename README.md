@@ -17,8 +17,8 @@ installed.
 - Leaving the world saves the replay to `reprise/replays/` in the game folder. A recording cut short by a crash is
   repaired and saved the next time you open the replay list.
 
-Everything the server sends is recorded, along with what it never sends back to you about yourself: your movement,
-held items, swings, block breaking, the blocks you place and the sounds you make.
+Reprise records world updates and registered clientbound mod payloads during play. It also records your own movement,
+held items, swings, block breaking, block placement and sounds.
 
 ## Watching
 
@@ -79,8 +79,9 @@ or in `reprise/ffmpeg/` in the game folder. PNG sequences need no ffmpeg.
 ## Limits
 
 - A replay plays on the Minecraft version it was recorded on.
-- Mods that send their own network packets to show something may not appear in replays, because those packets are not
-  recorded. Play a replay with the mods it was recorded with.
+- Play modded recordings with the same mods and versions. For visual state stored outside the vanilla world, mods can
+  subscribe to `ReplaySnapshotEvent` on the NeoForge game bus and write their current state as play payloads. This
+  restores the effect when a recording starts mid-session or a seek rebuilds the world from a later snapshot.
 - Time spent on loading screens (joining, changing dimension) is left out of the replay.
 
 ## Building

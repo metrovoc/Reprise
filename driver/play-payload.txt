@@ -1,0 +1,33 @@
+replay latest
+wait 60
+replay seek 5
+payload air 0 -59 4
+payload air 1 -59 4
+payload dark 2 -59 4
+replay seek 50
+payload gold 0 -59 4
+payload gold 1 -59 4
+payload lit 2 -59 4
+replay seek 85
+payload gold 4 -59 4
+replay seek 150
+payload gold 3 -59 4
+replay seek 105
+payload air 3 -59 4
+payload gold 4 -59 4
+replay seek 90
+payload gold 0 -59 4
+payload gold 1 -59 4
+payload lit 2 -59 4
+replay seek 5
+payload air 0 -59 4
+payload air 1 -59 4
+payload dark 2 -59 4
+replay seek 50
+payload gold 0 -59 4
+payload gold 1 -59 4
+payload lit 2 -59 4
+replay camera 0 -56 -2 0 24
+wait 20
+shot payload_replay
+quit

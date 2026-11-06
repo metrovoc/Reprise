@@ -25,7 +25,13 @@ public final class RepriseSteps {
     private static final Logger LOG = LogUtils.getLogger();
 
     @SubscribeEvent
+    static void registerPayloads(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) {
+        MarkerPayload.register(event);
+    }
+
+    @SubscribeEvent
     static void setup(FMLClientSetupEvent event) {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(MarkerPayload::snapshot);
         Driver.STEPS.put("record", (mc, arg) -> {
             switch (arg) {
                 case "start" -> Recorder.start();
@@ -35,6 +41,7 @@ public final class RepriseSteps {
                 default -> throw new IllegalArgumentException(arg);
             }
         });
+        Driver.STEPS.put("payload", MarkerPayload::step);
         Driver.STEPS.put("connect", (mc, arg) -> net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
             net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
             new net.minecraft.client.multiplayer.ServerData("Test", arg, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null));

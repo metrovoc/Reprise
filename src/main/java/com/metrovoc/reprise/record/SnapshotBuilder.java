@@ -1,6 +1,8 @@
 package com.metrovoc.reprise.record;
 
 import com.metrovoc.reprise.Reprise;
+import com.metrovoc.reprise.api.ReplaySnapshotEvent;
+import com.metrovoc.reprise.mixin.record.AuxiliaryLightAccessor;
 import com.mojang.datafixers.util.Pair;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,6 +30,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPopPacket;
 import net.minecraft.network.protocol.common.ClientboundResourcePackPushPacket;
 import net.minecraft.network.protocol.common.ClientboundUpdateTagsPacket;
@@ -56,12 +59,15 @@ import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerScoreEntry;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.payload.AuxiliaryLightDataPayload;
+import net.neoforged.neoforge.network.payload.ModdedNetworkPayload;
+import net.neoforged.neoforge.network.payload.ModdedNetworkQueryPayload;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
 
 /** Describes the client's current state as the packets a server would send to build it from nothing. */
 final class SnapshotBuilder {
     static void write(Recorder recorder, Minecraft mc, EntitySpawnData spawnData, Runnable spawnSelf) {
-        // Packets already queued for the game thread would otherwise be applied after the snapshot and recorded twice.
-        mc.packetProcessor().processQueuedPackets();
         ClientLevel level = mc.level;
         LocalPlayer player = mc.player;
         ClientPacketListener connection = mc.getConnection();
@@ -111,9 +117,20 @@ final class SnapshotBuilder {
                 Optional.of(new MapItemSavedData.MapPatch(0, 0, 128, 128, data.colors.clone()))));
         }
         recorder.writeGame(out);
+        NeoForge.EVENT_BUS.post(new ReplaySnapshotEvent(level, payload -> {
+            if (ReplayPayloads.records(payload)) {
+                recorder.writeGame(payload.toVanillaClientbound());
+            }
+        }));
     }
 
     private static void writeConfiguration(Recorder recorder, Minecraft mc, LocalPlayer player) {
+        var listener = mc.getConnection();
+        if (listener.getConnectionType().isNeoForge()) {
+            var setup = ChannelAttributes.getPayloadSetup(listener.getConnection());
+            recorder.writeConfig(new ClientboundCustomPayloadPacket(new ModdedNetworkQueryPayload(Map.of())));
+            recorder.writeConfig(new ClientboundCustomPayloadPacket(new ModdedNetworkPayload(setup)));
+        }
         recorder.writeConfig(new ClientboundUpdateEnabledFeaturesPacket(FeatureFlags.REGISTRY.toNames(mc.level.enabledFeatures())));
         RegistryOps<Tag> ops = player.registryAccess().createSerializationContext(NbtOps.INSTANCE);
         // No known packs: the replay carries every synced registry entry, so it plays without the server's data packs.
@@ -217,9 +234,14 @@ final class SnapshotBuilder {
         for (LevelChunk chunk : chunks) {
             tasks.add(ForkJoinPool.commonPool().submit(() -> new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null)));
         }
-        for (ForkJoinTask<ClientboundLevelChunkWithLightPacket> t : tasks) {
+        for (int i = 0; i < tasks.size(); i++) {
             try {
-                recorder.writeGame(t.join());
+                recorder.writeGame(tasks.get(i).join());
+                LevelChunk chunk = chunks.get(i);
+                var lights = ((AuxiliaryLightAccessor) (Object) chunk.getAuxLightManager(chunk.getPos())).reprise$lights();
+                if (!lights.isEmpty()) {
+                    recorder.writeGame(new AuxiliaryLightDataPayload(chunk.getPos(), Map.copyOf(lights)).toVanillaClientbound());
+                }
             } catch (RuntimeException e) {
                 Reprise.LOGGER.warn("Could not record a chunk", e);
             }

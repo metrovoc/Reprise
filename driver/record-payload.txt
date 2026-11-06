@@ -1,0 +1,25 @@
+# Run with -PsegmentTicks=80 to exercise a segment cut.
+world
+cmd tp @s 0 -55 0 0 20
+wait 30
+record start
+payload boundary
+wait 20
+payload send 0 -59 4
+wait 10
+payload gold 0 -59 4
+payload bundle 1 -59 4
+payload light 2 -59 4
+wait 10
+payload gold 1 -59 4
+payload lit 2 -59 4
+wait 80
+payload gold 4 -59 4
+record pause
+payload send 3 -59 4
+wait 15
+payload gold 3 -59 4
+record pause
+wait 25
+record stop
+quit
