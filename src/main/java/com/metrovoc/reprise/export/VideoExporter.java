@@ -103,11 +103,11 @@ public final class VideoExporter {
         this.returnTo = returnTo;
         this.start = session.project().start();
         this.end = session.project().end(session.duration());
-        this.width = settings.width & (settings.panorama ? ~3 : ~1);
-        this.height = settings.panorama ? this.width / 2 : settings.height & ~1;
+        this.width = settings.outputWidth();
+        this.height = settings.outputHeight();
         int scale = settings.supersample ? 2 : 1;
         int max = RenderSystem.getDevice().getMaxTextureSize();
-        this.captureWidth = settings.panorama ? width / 4 : width;
+        this.captureWidth = settings.panorama ? settings.sphereWidth() / 4 : width;
         this.captureHeight = settings.panorama ? captureWidth : height;
         if (this.width < 2 || this.height < 2 || (long) width * height > Integer.MAX_VALUE / 4
             || captureWidth > max / scale || captureHeight > max / scale) {
@@ -217,7 +217,7 @@ public final class VideoExporter {
             exporter.width, exporter.height);
     }
 
-    public Panorama.Face panoramaFace() { return panorama == null ? null : FACES[faceIndex]; }
+    public Panorama.Face panoramaFace() { return panorama == null ? null : panorama.captureFaces.get(faceIndex); }
 
     public boolean includesHud() {
         return panorama == null && !this.settings.hideHud;
@@ -332,7 +332,9 @@ public final class VideoExporter {
         }
         for (var section : renderer.visibleSections) {
             // Sections at the edge of the loaded area wait for neighbours that never come; vanilla skips them too.
-            if (section.isDirty() && (section.getSectionMesh() != net.minecraft.client.renderer.chunk.CompiledSectionMesh.UNCOMPILED || section.hasAllNeighbors())) {
+            // A queued rebuild clears the dirty flag before a worker compiles or uploads its first mesh.
+            boolean uncompiled = section.getSectionMesh() == net.minecraft.client.renderer.chunk.CompiledSectionMesh.UNCOMPILED;
+            if (uncompiled ? section.hasAllNeighbors() : section.isDirty()) {
                 this.stableFrames = 0;
                 return false;
             }
@@ -391,7 +393,7 @@ public final class VideoExporter {
         }
         if (panorama != null) {
             stableFrames = 0;
-            if (++faceIndex < FACES.length) return;
+            if (++faceIndex < panorama.captureFaces.size()) return;
             faceIndex = 0;
         }
         if (this.audio != null) {
@@ -517,9 +519,10 @@ public final class VideoExporter {
                 }
                 byte[] depth = captured.depth;
                 if (panorama != null) {
-                    colors[face] = bytes;
-                    if (withDepth) depths[face] = depth;
-                    if (++face < FACES.length) continue;
+                    int slot = panorama.captureFaces.get(face).ordinal();
+                    colors[slot] = bytes;
+                    if (withDepth) depths[slot] = depth;
+                    if (++face < panorama.captureFaces.size()) continue;
                     face = 0;
                     bytes = panorama.project(colors);
                     if (withDepth) depth = panorama.project(depths);
@@ -570,7 +573,7 @@ public final class VideoExporter {
                     this.sink.abort();
                 }
                 if (ok && panorama != null && settings.format == ExportSettings.Format.WEBM_VP9) {
-                    SphericalMetadata.tag(files.media);
+                    SphericalMetadata.tag(files.media, width, height, captureWidth * 4);
                     if (audio == null) {
                         Path webm = files.work.resolve("spherical.webm");
                         ok = FfmpegSink.run(FfmpegSink.find(settings.ffmpeg), java.util.List.of("-i", files.media.toString(),
@@ -585,7 +588,7 @@ public final class VideoExporter {
                     }
                 }
                 if (ok && panorama != null && settings.format != ExportSettings.Format.PNG_SEQUENCE
-                    && settings.format != ExportSettings.Format.WEBM_VP9) SphericalMetadata.tag(files.media);
+                    && settings.format != ExportSettings.Format.WEBM_VP9) SphericalMetadata.tag(files.media, width, height, captureWidth * 4);
                 if (ok) output = this.files.publish();
             } else {
                 abortWriter();

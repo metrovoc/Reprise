@@ -30,9 +30,27 @@ public final class ExportSettings {
     public boolean supersample;
     public boolean depthMap;
     public boolean panorama;
+    public int panoramaFov = 360;
 
     public boolean hardwareEncoder;
     public int bitrateMbps = 20;
+
+    /** Full sphere width at the requested vertical resolution, with square cube faces. */
+    public int sphereWidth() {
+        int verticalDegrees = Math.clamp(panoramaFov, 120, 180);
+        double pixelsPerDegree = ((width & ~3) / 2.0) / verticalDegrees;
+        return Math.toIntExact(4 * Math.round(90 * pixelsPerDegree));
+    }
+
+    public int outputWidth() {
+        if (!panorama) return width & ~1;
+        double crop = sphereWidth() * (Math.clamp(panoramaFov, 120, 360) / 360.0);
+        return Math.toIntExact(2 * Math.round(crop / 2));
+    }
+
+    public int outputHeight() {
+        return panorama ? (width & ~3) / 2 : height & ~1;
+    }
 
     public boolean supportsHardware() {
         return format == Format.MP4_H264 || format == Format.MP4_H265;

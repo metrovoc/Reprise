@@ -1,5 +1,7 @@
 package com.metrovoc.reprise.export;
 
+import java.util.EnumSet;
+import java.util.List;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -8,22 +10,24 @@ public final class Panorama {
     // Capture front last so the audio mix uses the shot's forward direction.
     public enum Face { BACK, LEFT, RIGHT, TOP, BOTTOM, FRONT }
 
+    final List<Face> captureFaces;
     private final int size;
     private final int[] samples;
     private final float[] radialScale;
 
     Panorama(int width, int height, int size, boolean depth) {
+        var used = EnumSet.noneOf(Face.class);
         this.size = size;
         samples = new int[Math.multiplyExact(width, height)];
         radialScale = depth ? new float[samples.length] : null;
         double[] sin = new double[width], cos = new double[width];
         for (int x = 0; x < width; x++) {
-            double longitude = ((x + 0.5) / width - 0.5) * 2 * Math.PI;
+            double longitude = (x + 0.5 - width * 0.5) * Math.PI / (2 * size);
             sin[x] = Math.sin(longitude);
             cos[x] = Math.cos(longitude);
         }
         for (int y = 0; y < height; y++) {
-            double latitude = ((y + 0.5) / height - 0.5) * Math.PI;
+            double latitude = (y + 0.5 - height * 0.5) * Math.PI / (2 * size);
             double up = Math.sin(latitude), horizontal = Math.cos(latitude);
             for (int x = 0; x < width; x++) {
                 double right = sin[x] * horizontal, front = cos[x] * horizontal;
@@ -43,11 +47,13 @@ public final class Panorama {
                     u = front > 0 ? right : -right;
                     v = up;
                 }
+                used.add(face);
                 int index = y * width + x;
                 samples[index] = (face.ordinal() * size + texel(v / major)) * size + texel(u / major);
                 if (depth) radialScale[index] = (float) (1 / major);
             }
         }
+        captureFaces = List.copyOf(used);
     }
 
     private int texel(double coordinate) {

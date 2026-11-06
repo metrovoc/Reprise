@@ -8,6 +8,8 @@ import com.metrovoc.reprise.playback.ReplaySession;
 import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -57,7 +59,7 @@ public final class ExportScreen extends Screen {
             settings.panorama = !settings.panorama;
             rebuildWidgets();
         });
-        cycle(x, y + 24, w - 68, () -> Component.translatable("reprise.export.resolution", this.settings.width + "×" + (settings.panorama ? settings.width / 2 : settings.height)), () -> {
+        var resolution = cycle(x, y + 24, w - 68, this::resolutionLabel, () -> {
             var sizes = settings.panorama ? PANORAMAS : RESOLUTIONS;
             int i = 0;
             for (int j = 0; j < sizes.length; j++) {
@@ -103,24 +105,56 @@ public final class ExportScreen extends Screen {
         this.depthButton = cycle(x + 117, y + 120, w - 117,
             this::depthLabel, () -> this.settings.depthMap = !this.settings.depthMap);
         this.depthButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.depth.tooltip")));
-        var hud = cycle(x + w - 64, y + 24, 64,
-            () -> Component.translatable(settings.panorama ? "reprise.export.hud.off" : !this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
-            () -> {
-                if (!this.settings.hideHud) {
-                    this.settings.hideHud = true;
-                    this.settings.handsOnly = true;
-                } else if (this.settings.handsOnly) {
-                    this.settings.handsOnly = false;
-                } else {
-                    this.settings.hideHud = false;
+        if (settings.panorama) {
+            addRenderableWidget(new AbstractSliderButton(x + w - 64, y + 24, 64, 20, angleLabel(), (settings.panoramaFov - 120) / 240.0) {
+                @Override protected void applyValue() {
+                    int fov = 120 + (int) Math.round(value * 48) * 5;
+                    if (fov != settings.panoramaFov) {
+                        if (!dragging) session.project().checkpoint();
+                        settings.panoramaFov = fov;
+                        if (!dragging) session.project().save();
+                    }
                 }
-            });
-        hud.active = !settings.panorama;
-        hud.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
+                @Override protected void updateMessage() {
+                    setMessage(angleLabel());
+                    resolution.setMessage(resolutionLabel());
+                }
+                @Override public void onClick(MouseButtonEvent event, boolean doubleClick) {
+                    session.project().checkpoint();
+                    super.onClick(event, doubleClick);
+                }
+                @Override public void onRelease(MouseButtonEvent event) {
+                    super.onRelease(event);
+                    session.project().save();
+                }
+            }).setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.coverage.tooltip")));
+        } else {
+            var hud = cycle(x + w - 64, y + 24, 64,
+                () -> Component.translatable(!this.settings.hideHud ? "reprise.export.hud.on" : this.settings.handsOnly ? "reprise.export.hud.hands" : "reprise.export.hud.off"),
+                () -> {
+                    if (!this.settings.hideHud) {
+                        this.settings.hideHud = true;
+                        this.settings.handsOnly = true;
+                    } else if (this.settings.handsOnly) {
+                        this.settings.handsOnly = false;
+                    } else {
+                        this.settings.hideHud = false;
+                    }
+                });
+            hud.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("reprise.export.hud.tooltip")));
+        }
         updatePasses();
 
         addRenderableWidget(Button.builder(Component.translatable("reprise.export.start"), b -> startExport()).bounds(x, y + 147, w / 2 - 2, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose()).bounds(x + w / 2 + 2, y + 147, w / 2 - 2, 20).build());
+    }
+
+    private Component resolutionLabel() {
+        return Component.translatable("reprise.export.resolution", settings.outputWidth() + "×" + settings.outputHeight());
+    }
+
+    private Component angleLabel() {
+        return Component.translatable("reprise.export.coverage", settings.panoramaFov);
     }
 
     private void updateFrameCount() {

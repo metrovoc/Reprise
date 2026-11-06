@@ -18,9 +18,21 @@ final class SphericalMetadata {
         return out.array();
     }
 
-    private static final byte[] SPHERE = box("sv3d",
-        box("svhd", new byte[4], "Reprise\0".getBytes(StandardCharsets.UTF_8)),
-        box("proj", box("prhd", new byte[16]), box("equi", new byte[20])));
+    private static void putCenteredBounds(ByteBuffer equi, int visible, int full) {
+        long removed = (long) (full - visible) * 0xFFFF_FFFFL;
+        // Readers round the leading margin up and derive the trailing margin from the full image size.
+        long leading = removed / (2L * full);
+        long total = Math.ceilDiv(removed, full);
+        equi.putInt((int) leading).putInt((int) (total - leading));
+    }
+
+    private static byte[] sphere(int width, int height, int fullWidth) {
+        var equi = ByteBuffer.allocate(20).putInt(0);
+        putCenteredBounds(equi, height, fullWidth / 2);
+        putCenteredBounds(equi, width, fullWidth);
+        return box("sv3d", box("svhd", new byte[4], "Reprise\0".getBytes(StandardCharsets.UTF_8)),
+            box("proj", box("prhd", new byte[16]), box("equi", equi.array())));
+    }
 
     private record Box(long start, long size, int header, String type) {
         long end() { return start + size; }
@@ -49,7 +61,8 @@ final class SphericalMetadata {
         throw new IOException("Missing " + name + " in video index");
     }
 
-    static void tag(Path file) throws IOException {
+    static void tag(Path file, int width, int height, int fullWidth) throws IOException {
+        byte[] metadata = sphere(width, height, fullWidth);
         try (var f = new RandomAccessFile(file.toFile(), "rw")) {
             List<Box> parents = new ArrayList<>();
             var parent = new Box(0, f.length(), 0, "");
@@ -74,13 +87,13 @@ final class SphericalMetadata {
                 end -= count;
                 f.seek(end);
                 f.readFully(buffer, 0, count);
-                f.seek(end + SPHERE.length);
+                f.seek(end + metadata.length);
                 f.write(buffer, 0, count);
             }
             f.seek(insert);
-            f.write(SPHERE);
+            f.write(metadata);
             for (Box box : parents) {
-                long size = box.size + SPHERE.length;
+                long size = box.size + metadata.length;
                 if (box.header == 16) {
                     f.seek(box.start + 8);
                     f.writeLong(size);

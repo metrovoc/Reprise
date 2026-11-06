@@ -257,6 +257,8 @@ public final class RepriseSteps {
                     settings.audio = java.util.Arrays.asList(a).contains("audio");
                     settings.supersample = java.util.Arrays.asList(a).contains("ssaa");
                     settings.panorama = java.util.Arrays.asList(a).contains("360");
+                    settings.panoramaFov = 360;
+                    for (String option : a) if (option.startsWith("fov=")) settings.panoramaFov = Integer.parseInt(option.substring(4));
                     settings.depthMap = java.util.Arrays.asList(a).contains("depth");
                     settings.transparentSky = java.util.Arrays.asList(a).contains("alpha");
                     if (a[0].equals("export")) com.metrovoc.reprise.export.VideoExporter.start(s, settings, null);

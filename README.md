@@ -146,9 +146,10 @@ waits for every chunk in view
 to finish building. With Sodium, Reprise requests synchronous terrain rendering during export. With Iris, shader time
 follows the replay and the shader frame counter advances once per exported frame.
 
-- Choose **360°** in place of **Flat** to export a full equirectangular panorama. The output is twice as wide as
-  it is tall. The camera path sets the forward view, and all six directions use the same replay instant. Video
-  files carry spherical projection metadata for 360° players. Panoramas capture the world without first-person
+- Switch **Flat** to **Panorama** for equirectangular video. Set horizontal coverage from 120° to 360° in 5° steps.
+  A full sphere is 2:1, a forward hemisphere is square, and narrower views crop the poles as well as the sides.
+  The camera path sets the forward view. Each frame samples one replay instant and video files carry their
+  crop bounds for spherical players. Panoramas capture the world without first-person
   hands or HUD overlays, and the optional stereo soundtrack follows the forward view.
 - Formats: H.264 MP4, H.265 MP4, VP9 WebM, ProRes 4444 MOV, or a PNG sequence.
 - H.264 and H.265 support CPU encoding with constant quality, or GPU encoding with a target bitrate.
