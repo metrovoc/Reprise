@@ -84,6 +84,16 @@ public final class ReplayFile implements Closeable {
         return this.meta;
     }
 
+    public boolean hasCameraPaths() {
+        return zip.getEntry("timelines.json") != null;
+    }
+
+    public String readCameraPaths() throws IOException {
+        var paths = zip.getEntry("timelines.json");
+        if (paths == null || paths.getSize() > 16 * 1024 * 1024) throw new IOException("Missing or oversized camera path library");
+        return new String(entry("timelines.json"), StandardCharsets.UTF_8);
+    }
+
     public byte[] entry(String name) throws IOException {
         ZipEntry entry = this.zip.getEntry(name);
         if (entry == null) {

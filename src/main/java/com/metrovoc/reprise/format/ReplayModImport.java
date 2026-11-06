@@ -97,6 +97,11 @@ public final class ReplayModImport {
                 packs.put("replay://" + entry.getKey(), entry.getValue().getAsString()));
             return ReplayOutput.write(destination, meta, out -> {
                 for (String hash : new HashSet<>(packs.values())) EmbeddedPacks.copy(zip, out, hash);
+                var paths = zip.getEntry("timelines.json");
+                if (paths != null) {
+                    out.putNextEntry(new ZipEntry("timelines.json"));
+                    try (var input = zip.getInputStream(paths)) { input.transferTo(out); }
+                }
                 var segment = new ReplayMeta.Segment(Actions.segmentFile(0), 0, true);
                 // MCPR interleaves terrain and game packets. Stream terrain straight into chunk-cache
                 // entries while spooling the smaller timeline separately, then append it to the ZIP.

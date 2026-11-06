@@ -21,6 +21,13 @@ public final class Keyframe {
             return other != null && java.util.Objects.equals(id, other.id) && point == other.point;
         }
     }
+    /** Endpoint tangent offsets from a straight chord, for an authored cubic in XYZ, yaw, pitch and roll. */
+    public record Spline(double[] startOffset, double[] endOffset) {
+        double sample(int channel, double a, double b, double s) {
+            return a + s * (b - a) + s * (1 - s) * ((1 - s) * startOffset[channel] + s * endOffset[channel]);
+        }
+    }
+    public Spline spline;
     public Target target;
     /** Extra full revolutions from this orbit key to the next. */
     public int turns;
@@ -35,6 +42,7 @@ public final class Keyframe {
 
     public Keyframe copy() {
         Keyframe k = new Keyframe();
+        k.spline = this.spline;
         k.target = this.target;
         k.turns = this.turns;
         k.tick = this.tick;

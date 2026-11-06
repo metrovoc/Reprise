@@ -90,6 +90,16 @@ public final class EditorScreen extends Screen {
             .bounds(68, 54, 60, 20).build());
         this.saveClip = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.save_clip"), b -> saveClip())
             .bounds(132, 30, 82, 20).tooltip(Tooltip.create(Component.translatable("reprise.editor.save_clip.tooltip"))).build());
+        if (session.file().hasCameraPaths()) {
+            addRenderableWidget(Button.builder(Component.translatable("reprise.editor.replaymod_paths"), b -> {
+                try {
+                    minecraft.setScreen(new ReplayModPathsScreen(this, session));
+                } catch (java.io.IOException | RuntimeException e) {
+                    minecraft.setScreen(new AlertScreen(() -> minecraft.setScreen(this), Component.translatable("reprise.editor.path_failed"),
+                        Component.literal(String.valueOf(e.getMessage()))));
+                }
+            }).bounds(132, 54, 110, 20).build());
+        }
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
@@ -188,7 +198,8 @@ public final class EditorScreen extends Screen {
         this.fewerTurns.visible = this.moreTurns.visible = this.selected != null && this.selected.target != null
             && this.selected.target.mode() == Keyframe.Tracking.ORBIT;
         this.interpolationButton.active = this.selected != null;
-        this.interpolationButton.setMessage(Component.translatable("reprise.interpolation." +
+        this.interpolationButton.setMessage(this.selected != null && this.selected.spline != null
+            ? Component.translatable("reprise.interpolation.spline") : Component.translatable("reprise.interpolation." +
             (this.selected == null ? Keyframe.Interpolation.SMOOTH : this.selected.interpolation).name().toLowerCase()));
     }
 
@@ -230,6 +241,7 @@ public final class EditorScreen extends Screen {
         if (this.selected != null) {
             project().checkpoint();
             Keyframe.Interpolation[] values = Keyframe.Interpolation.values();
+            this.selected.spline = null;
             this.selected.interpolation = values[(this.selected.interpolation.ordinal() + 1) % values.length];
             project().save();
         }
@@ -286,7 +298,8 @@ public final class EditorScreen extends Screen {
             SpeedKey speed = this.timeline.speedKeyAt(this.session, mouseX, mouseY);
             var marker = this.timeline.markerAt(this.session, mouseX);
             if (speed != null) {
-                tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed(speed.speed)).getString();
+                tip = Component.translatable("reprise.editor.speed_key.hover", PlaybackControls.formatSpeed((float) speed.speed),
+                    Component.translatable(speed.hold ? "reprise.interpolation.hold" : "reprise.interpolation.linear")).getString();
             } else if (marker != null) {
                 tip = Component.translatable("reprise.editor.marker.hover", marker.name.isEmpty() ? Timecode.precise(marker.tick) : marker.name).getString();
             }
@@ -322,6 +335,12 @@ public final class EditorScreen extends Screen {
             return true;
         }
         SpeedKey speedHit = this.timeline.speedKeyAt(this.session, event.x(), event.y());
+        if (speedHit != null && event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && doubleClick) {
+            project().checkpoint();
+            speedHit.hold = !speedHit.hold;
+            project().save();
+            return true;
+        }
         if (speedHit != null && event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             project().checkpoint();
             project().speedKeys.remove(speedHit);

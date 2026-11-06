@@ -191,6 +191,7 @@ public final class ReplayProject {
         for (int i = 0; i < keys.size() - 1; i++) {
             SpeedKey a = keys.get(i), b = keys.get(i + 1);
             if (tick < b.tick) {
+                if (a.hold) return a.speed;
                 double f = (tick - a.tick) / Math.max(1e-9, b.tick - a.tick);
                 return a.speed + (b.speed - a.speed) * f;
             }

@@ -52,6 +52,12 @@ public final class PathInterpolator {
             default -> {
             }
         }
+        if (a.spline != null) {
+            var curve = a.spline;
+            return new CameraPose(curve.sample(0, a.x, b.x, s), curve.sample(1, a.y, b.y, s), curve.sample(2, a.z, b.z, s),
+                (float) curve.sample(3, a.yaw, b.yaw, s), (float) curve.sample(4, a.pitch, b.pitch, s),
+                (float) curve.sample(5, a.roll, b.roll, s), (float) (a.fov + s * (b.fov - a.fov)));
+        }
         double[] yaws = unwrapped(keys, i, k -> k.yaw);
         double[] rolls = unwrapped(keys, i, k -> k.roll);
         return new CameraPose(

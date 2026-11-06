@@ -37,8 +37,14 @@ Flashback editor projects, optional sub-tick camera samples, and wall-clock timi
 **ReplayMod MCPR.** Import format 14 recordings made with the Minecraft 26.1.2 network protocol.
 Recorded packets and markers use the 20-tick timeline. Playback opens when the recording player and terrain
 first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
-connection configuration and includes embedded server resource packs. Camera paths created in ReplayMod are
-outside the import.
+connection configuration and includes embedded server resource packs.
+
+If the recording contains a ReplayMod path library, open **Editor → ReplayMod paths…** and select the autosave
+or a named shot. Loading it replaces the camera keys, speed keys, and export range in one undoable edit.
+Linear, cubic spline, and Catmull–Rom segments retain their position, rotation, roll, and timing. Reprise
+adds a camera key where a time-speed change splits a segment and uses your current FOV. Import supports
+free-camera shots whose time and camera tracks start and end together and whose replay time advances
+throughout. The export range rounds outward to whole replay ticks.
 
 ## Watching
 
@@ -96,8 +102,8 @@ and modded state. That history can include events from before the visible clip.
 - **Path: On** previews the shot while playing or scrubbing. Switch it off to fly the camera freely. The editor draws the path
   against the subjects at the current replay time.
 - **Speed** keys make slow motion and timelapses: set a speed with `−`/`+`, press *Speed*, and from that moment the
-  preview and the export run at that speed. Between two keys the speed changes linearly. Right-click a speed key to remove
-  it.
+  preview and the export run at that speed. Double-click a speed key to switch between a linear ramp and holding that speed
+  until the next key. Right-click a speed key to remove it.
 - **Entities** lists players and mobs at the current replay time. Search by name or UUID, then select a row to
   spectate, hide, or outline that entity. Enter a six-digit hex color to change its outline, or set a custom name tag. These edits
   are saved with the project and apply to video exports. Hiding a spectated player also hides their first-person hands.

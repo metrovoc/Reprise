@@ -30,7 +30,7 @@ public final class FrameSchedule {
                 SpeedKey a = keys.get(i - 1), b = keys.get(i);
                 double left = Math.max(start, a.tick), right = Math.min(end, b.tick);
                 if (right <= left) continue;
-                double slope = ((double) b.speed - a.speed) / (b.tick - a.tick);
+                double slope = a.hold ? 0 : (b.speed - a.speed) / (b.tick - a.tick);
                 add(left, right, a.speed + slope * (left - a.tick), a.speed + slope * (right - a.tick));
             }
             SpeedKey last = keys.getLast();
