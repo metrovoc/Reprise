@@ -20,7 +20,10 @@ public abstract class ClientPacketListenerMixin {
     private void reprise$noLoadingScreenWhenSeeking(LocalPlayer player, ClientLevel level, LevelLoadingScreen.Reason reason,
                                                     ResourceKey<Level> to, ResourceKey<Level> from, CallbackInfo ci) {
         ReplaySession session = ReplaySession.active();
-        if (session != null && session.isSeeking()) {
+        if (session == null) return;
+        var screen = net.minecraft.client.Minecraft.getInstance().screen;
+        if (session.isSeeking() || session.isSwitchingWorld() && !(screen instanceof LevelLoadingScreen)
+            && !(screen instanceof net.minecraft.client.gui.screens.GenericMessageScreen)) {
             ci.cancel();
         }
     }

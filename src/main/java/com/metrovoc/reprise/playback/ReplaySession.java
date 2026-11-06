@@ -54,6 +54,7 @@ import net.minecraft.network.protocol.configuration.ConfigurationProtocols;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundStartConfigurationPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -118,6 +119,7 @@ public final class ReplaySession {
     private boolean fastForwarding;
     private boolean seeking;
     private boolean reconnecting;
+    private boolean switchingWorld;
     private int recorderId = Integer.MIN_VALUE;
     private boolean cameraPlaced;
     private boolean usedEmbeddedPacks;
@@ -304,6 +306,10 @@ public final class ReplaySession {
 
     public boolean isFastForwarding() {
         return this.fastForwarding;
+    }
+
+    public boolean isSwitchingWorld() {
+        return switchingWorld;
     }
 
     public boolean isSeeking() {
@@ -493,7 +499,7 @@ public final class ReplaySession {
                 }
                 case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()));
                 case Actions.CHUNK_REF -> deliverChunk(Varints.read(this.reader));
-                case Actions.CONFIG_PACKET -> readBytes(); // only valid inside a snapshot
+                case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                 case Actions.SNAPSHOT_END -> { }
                 default -> throw new IllegalStateException("Unknown action " + action + " in segment " + this.segment);
             }
@@ -629,7 +635,7 @@ public final class ReplaySession {
                     }
                     case Actions.GAME_PACKET -> deliverGame(ByteBuffer.wrap(readBytes()), -1, beforeFirstBoundary);
                     case Actions.CHUNK_REF -> deliverChunk(Varints.read(buf));
-                    case Actions.CONFIG_PACKET -> readBytes();
+                    case Actions.CONFIG_PACKET -> deliverConfiguration(readBytes());
                     default -> throw new IllegalStateException("Unexpected action " + action + " in snapshot");
                 }
             }
@@ -665,23 +671,38 @@ public final class ReplaySession {
         this.mc.pendingConnection = this.connection;
 
         for (byte[] bytes : config) {
-            Packet<? super ClientConfigurationPacketListener> packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
-            if (packet instanceof ClientboundResourcePackPopPacket pop) {
-                snapshotPacks.removeIf(push -> pop.id().isEmpty() || pop.id().get().equals(push.id()));
-            }
-            if (packet instanceof ClientboundResourcePackPushPacket push && handleEmbeddedPack(push)) {
+            var packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
+            if (!(packet instanceof ClientboundFinishConfigurationPacket)) deliverConfigurationPacket(packet, true);
+        }
+        finishConfiguration();
+    }
+
+    private void deliverConfiguration(byte[] bytes) {
+        if (!switchingWorld) return;
+        var packet = PacketCodecs.decode(PacketCodecs.CONFIG, bytes);
+        if (packet instanceof ClientboundFinishConfigurationPacket) finishConfiguration();
+        else deliverConfigurationPacket(packet, false);
+    }
+
+    private void deliverConfigurationPacket(Packet<? super ClientConfigurationPacketListener> packet, boolean snapshot) {
+        if (snapshot && packet instanceof ClientboundResourcePackPopPacket pop) {
+            snapshotPacks.removeIf(push -> pop.id().isEmpty() || pop.id().get().equals(push.id()));
+        }
+        if (packet instanceof ClientboundResourcePackPushPacket push && handleEmbeddedPack(push)) {
+            if (snapshot) {
                 snapshotPacks.removeIf(old -> old.id().equals(push.id()));
                 snapshotPacks.add(push);
-                continue;
             }
-            if (com.metrovoc.reprise.record.Recorder.liveOnly(packet) || packet instanceof ClientboundFinishConfigurationPacket) continue;
-            if (packet instanceof ClientboundCustomPayloadPacket custom
-                && !(custom.payload() instanceof ModdedNetworkQueryPayload)
-                && !(custom.payload() instanceof ModdedNetworkPayload)) {
-                continue;
-            }
-            deliver(packet, this.configListener);
+            return;
         }
+        if (com.metrovoc.reprise.record.Recorder.liveOnly(packet)) return;
+        if (packet instanceof ClientboundCustomPayloadPacket custom
+            && !(custom.payload() instanceof ModdedNetworkQueryPayload)
+            && !(custom.payload() instanceof ModdedNetworkPayload)) return;
+        deliver(packet, this.configListener);
+    }
+
+    private void finishConfiguration() {
         deliver(ClientboundFinishConfigurationPacket.INSTANCE, this.configListener);
         if (!(this.connection.getPacketListener() instanceof ClientPacketListener play)) {
             throw new IllegalStateException("Replay did not reach the play phase");
@@ -748,6 +769,17 @@ public final class ReplaySession {
             }
             return;
         }
+        if (packet instanceof ClientboundStartConfigurationPacket start) {
+            // Vanilla carries the active registries, feature flags and cookies into the next
+            // configuration listener. A backward seek must rebuild the opening registry state.
+            if (reader.getInt(Integer.BYTES) < Actions.RECONFIGURATION_VERSION) return;
+            switchingWorld = true;
+            configHash = null;
+            skyLightCache.clear();
+            listener.handleConfigurationStart(start);
+            configListener = (ClientConfigurationPacketListenerImpl) connection.getPacketListener();
+            return;
+        }
         if (handleEmbeddedPack(packet)) return;
         packet = this.filter.apply(packet);
         if (packet == null) {
@@ -789,6 +821,7 @@ public final class ReplaySession {
             if (moved != null) settleEntity(moved);
         }
         if (packet instanceof ClientboundLoginPacket) {
+            switchingWorld = false;
             addCameraInfo(listener);
         } else if (cameraPos != null && this.mc.player != null) {
             this.mc.player.snapTo(cameraPos.x, cameraPos.y, cameraPos.z, yRot, xRot);

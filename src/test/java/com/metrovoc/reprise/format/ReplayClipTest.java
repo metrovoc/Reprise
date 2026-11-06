@@ -20,6 +20,7 @@ class ReplayClipTest {
         var meta = new ReplayMeta();
         meta.chunkCount = 4;
         meta.durationTicks = 6;
+        meta.worldSwitchTicks.addAll(List.of(2, 3, 4, 5));
         Path file = dir.resolve("source.reprise");
         try (var zip = new ZipOutputStream(Files.newOutputStream(file))) {
             var out = new DataOutputStream(zip);
@@ -59,6 +60,7 @@ class ReplayClipTest {
         try (var clip = new ReplayFile(ReplayClip.save(original, 3, 4))) {
             assertEquals(1, clip.meta().durationTicks);
             assertEquals(2, clip.meta().segments.size());
+            assertEquals(List.of(1), clip.meta().worldSwitchTicks);
             assertEquals(List.of(0, 1), clip.meta().markers.stream().map(m -> m.tick).toList());
             assertEquals("mark 3", clip.meta().markers.getFirst().name);
             assertEquals(2, clip.meta().chunkCount);
@@ -88,6 +90,7 @@ class ReplayClipTest {
             int cut = replay.meta().segments.stream().filter(segment -> segment.startTick == 6)
                 .mapToInt(replay.meta().segments::indexOf).findFirst().orElseThrow();
             assertEquals(7, replay.meta().durationTicks);
+            assertEquals(List.of(2, 3, 4, 5, 7), replay.meta().worldSwitchTicks);
             assertEquals(SNAPSHOT_TICK_VERSION, replay.segment(cut).getInt(Integer.BYTES));
             assertArrayEquals(new byte[]{CHUNK_REF, 0, GAME_PACKET, 1, 42, SNAPSHOT_TICK, SNAPSHOT_END,
                 CHUNK_REF, 1, TICK}, bytes(replay.segment(cut)));

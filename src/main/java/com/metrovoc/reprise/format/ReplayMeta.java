@@ -31,6 +31,8 @@ public final class ReplayMeta {
     public String recorderName = "";
     public String recorderUuid = "";
     public int chunkCount;
+    /** Login ticks that replace the world inside an imported segment. */
+    public List<Integer> worldSwitchTicks = new ArrayList<>();
     public List<Segment> segments = new ArrayList<>();
     public List<Marker> markers = new ArrayList<>();
     public Map<String, String> mods = new LinkedHashMap<>();

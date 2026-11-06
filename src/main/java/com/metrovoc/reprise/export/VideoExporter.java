@@ -69,6 +69,7 @@ public final class VideoExporter {
     private int waited;
     private int stableFrames;
     private int neededTick;
+    private final java.util.NavigableSet<Double> worldCuts = new java.util.TreeSet<>();
     private int lastVisible = -1;
     private boolean captureThisFrame;
     private boolean progressFrame;
@@ -113,6 +114,10 @@ public final class VideoExporter {
             throw new IllegalStateException(Component.translatable("reprise.export.alpha_shaders").getString());
         }
         this.returnTo = returnTo;
+        for (int tick : session.meta().worldSwitchTicks) worldCuts.add(session.project().shotTick(tick));
+        for (var segment : session.meta().segments) {
+            if (segment.reset) worldCuts.add(session.project().shotTick(segment.startTick));
+        }
         this.start = session.project().start();
         this.end = session.project().end(session.duration());
         this.width = settings.outputWidth();
@@ -336,9 +341,13 @@ public final class VideoExporter {
         }
         double target = shotTick();
         int needTick = target >= this.session.duration() ? this.session.duration() : (int) target + 1;
+        // Vanilla interpolates toward the next tick. Its entities and terrain belong to a
+        // different world at a hard cut, so hold the outgoing world's final pose until then.
+        Double cut = worldCuts.higher(target);
+        if (cut != null && cut <= needTick) needTick = (int) target;
         this.session.skipFrozenTicks(needTick);
         int ticks = Math.max(0, needTick - this.session.tick());
-        partial[0] = (float) (target - needTick + 1);
+        partial[0] = (float) Math.min(1, target - needTick + 1);
         this.neededTick = needTick;
         this.captureThisFrame = true;
         return ticks;

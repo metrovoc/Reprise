@@ -46,8 +46,10 @@ library to translate the packets locally. Mod-specific data needs compatible reg
 
 Recorded packets and markers use the 20-tick timeline. Packets in a bundle take effect together at its
 opening timestamp. To apply this timing to an earlier import, import the original MCPR again. Playback
-opens when the recording player and terrain first appear. Backward seeks rebuild the world from the start of the recording. Import covers a single
-connection configuration and includes embedded server resource packs.
+opens when the recording player and terrain first appear. Backward seeks rebuild the world from the start
+of the recording. Same-version imports can cross server switches. The outgoing world stays visible until the
+new world login, when its registries and packets take effect together. Recordings with these switches require
+a reader that supports segment format 3. Embedded server resource packs travel with the recording.
 
 If the recording contains a ReplayMod path library, open **Editor → ReplayMod paths…** and select the autosave
 or a named shot. Loading it replaces the camera keys, speed keys, world freezes, and export range in one undoable edit.

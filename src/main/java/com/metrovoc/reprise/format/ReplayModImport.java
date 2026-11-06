@@ -124,6 +124,12 @@ public final class ReplayModImport {
                         }
                         writer.finish(duration);
                     }
+                    if (!meta.worldSwitchTicks.isEmpty()) {
+                        try (var file = new java.io.RandomAccessFile(timeline.toFile(), "rw")) {
+                            file.seek(Integer.BYTES);
+                            file.writeInt(Actions.RECONFIGURATION_VERSION);
+                        }
+                    }
                     out.putNextEntry(new ZipEntry(segment.file));
                     Files.copy(timeline, out);
                 } finally {
@@ -166,6 +172,11 @@ public final class ReplayModImport {
         private final FileBackedOutputStream bundle = new FileBackedOutputStream(2 * 1024 * 1024);
         private final DataOutputStream bundleOut = new DataOutputStream(bundle);
         private int bundleTime = -1, bundleSize, lastTimestamp;
+        // Commit a server switch at its world login. A paused frame can always display
+        // a world, including while the next server is still negotiating configuration.
+        private final FileBackedOutputStream handoff = new FileBackedOutputStream(2 * 1024 * 1024);
+        private final DataOutputStream handoffOut = new DataOutputStream(handoff);
+        private boolean switching;
         private Phase phase = Phase.LOGIN;
         private boolean joined;
         private int recorderId = -1, spawnTick = -1, terrainTick = -1, previous;
@@ -231,11 +242,14 @@ public final class ReplayModImport {
         @Override
         public void close() throws IOException {
             // An unfinished trailing bundle was never delivered by the network pipeline.
-            bundle.reset();
+            try {
+                bundle.reset();
+            } finally {
+                handoff.reset();
+            }
         }
 
         private void writePacket(int time, byte[] bytes, ByteBuffer body, int id) throws IOException {
-            int size = bytes.length;
             if (phase == Phase.LOGIN) {
                 if (id == loginIds.get(LoginPacketTypes.CLIENTBOUND_LOGIN_FINISHED)) {
                     var buf = Unpooled.wrappedBuffer(body);
@@ -263,21 +277,38 @@ public final class ReplayModImport {
                 Varints.write(new DataOutputStream(framed), id);
                 framed.write(payload);
                 bytes = framed.toByteArray();
-                size = bytes.length;
+            }
+            if (phase == Phase.PLAY && id == ids.get(GamePacketTypes.CLIENTBOUND_START_CONFIGURATION)) {
+                if (!joined || switching) throw new IOException("Configuration switch without a world at " + time + " ms");
+                switching = true;
+                phase = Phase.CONFIGURATION;
+                writeAction(handoffOut, Actions.GAME_PACKET, bytes);
+                return;
+            }
+            boolean login = phase == Phase.PLAY && id == ids.get(GamePacketTypes.CLIENTBOUND_LOGIN);
+            if (switching && !login) {
+                writeAction(handoffOut, phase == Phase.CONFIGURATION ? Actions.CONFIG_PACKET : Actions.GAME_PACKET, bytes);
+                if (phase == Phase.CONFIGURATION && id == configIds.get(ConfigurationPacketTypes.CLIENTBOUND_FINISH_CONFIGURATION)) {
+                    phase = Phase.PLAY;
+                }
+                return;
             }
             if (phase == Phase.PLAY) {
-                if (id == ids.get(GamePacketTypes.CLIENTBOUND_START_CONFIGURATION)) {
-                    throw new IOException("Recording switches configuration during play at " + time + " ms");
-                }
                 if (joined && time > 0 && segment.actionsOffset == 0) endSnapshot(out, segment);
                 if (segment.actionsOffset != 0) advance(out, segment, Math.max(0, (time - 1) / 50));
+                if (switching) {
+                    handoff.asByteSource().copyTo(out);
+                    handoff.reset();
+                    switching = false;
+                    meta.worldSwitchTicks.add(tickAt(time));
+                }
                 if (id == ids.get(GamePacketTypes.CLIENTBOUND_LEVEL_CHUNK_WITH_LIGHT)) {
                     if (meta.chunkCount % Actions.CHUNKS_PER_FILE == 0) {
                         chunks.flush();
                         zip.putNextEntry(new ZipEntry(Actions.chunkFile(meta.chunkCount / Actions.CHUNKS_PER_FILE)));
                     }
                     if (terrainTick < 0) terrainTick = tickAt(time);
-                    Varints.write(chunks, size);
+                    Varints.write(chunks, bytes.length);
                     chunks.write(bytes);
                     out.writeByte(Actions.CHUNK_REF);
                     Varints.write(out, meta.chunkCount++);
@@ -285,18 +316,15 @@ public final class ReplayModImport {
                 }
                 if (id == ids.get(GamePacketTypes.CLIENTBOUND_LEVEL_PARTICLES)) {
                     bytes = vanillaBlockParticle(bytes, body);
-                    size = bytes.length;
                 }
-                if (id == ids.get(GamePacketTypes.CLIENTBOUND_LOGIN)) {
+                if (login) {
                     recorderId = body.getInt();
                     joined = true;
                 } else if (id == ids.get(GamePacketTypes.CLIENTBOUND_ADD_ENTITY) && spawnTick < 0 && Varints.read(body) == recorderId) {
                     spawnTick = tickAt(time);
                 }
             }
-            out.writeByte(phase == Phase.CONFIGURATION ? Actions.CONFIG_PACKET : Actions.GAME_PACKET);
-            Varints.write(out, size);
-            out.write(bytes);
+            writeAction(out, phase == Phase.CONFIGURATION ? Actions.CONFIG_PACKET : Actions.GAME_PACKET, bytes);
             if (phase == Phase.CONFIGURATION && id == configIds.get(ConfigurationPacketTypes.CLIENTBOUND_FINISH_CONFIGURATION)) {
                 phase = Phase.PLAY;
             }
@@ -329,6 +357,12 @@ public final class ReplayModImport {
         byte[] result = Arrays.copyOf(bytes, options + length);
         System.arraycopy(bytes, start, result, options, length);
         return result;
+    }
+
+    private static void writeAction(DataOutputStream out, int action, byte[] bytes) throws IOException {
+        out.writeByte(action);
+        Varints.write(out, bytes.length);
+        out.write(bytes);
     }
 
     private static void endSnapshot(DataOutputStream out, ReplayMeta.Segment segment) throws IOException {

@@ -41,6 +41,7 @@ public final class ReplayJoiner {
             combined.name = name.isBlank() ? "Joined " + LocalDateTime.now().format(TIMESTAMP) : name.strip();
             combined.recordedAt = System.currentTimeMillis();
             combined.durationTicks = Math.addExact(a.durationTicks, b.durationTicks);
+            for (int tick : b.worldSwitchTicks) combined.worldSwitchTicks.add(Math.addExact(tick, a.durationTicks));
             combined.segments.clear();
             for (var marker : b.markers) {
                 marker.tick = Math.addExact(marker.tick, a.durationTicks);

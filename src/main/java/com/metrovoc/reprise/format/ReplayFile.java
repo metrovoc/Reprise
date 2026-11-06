@@ -127,7 +127,7 @@ public final class ReplayFile implements Closeable {
             throw new IOException("Bad segment header in segment " + index);
         }
         int version = buf.getInt();
-        if (version > Actions.SNAPSHOT_TICK_VERSION) {
+        if (version > Actions.RECONFIGURATION_VERSION) {
             throw new IOException("Segment " + index + " needs a newer version of Reprise");
         }
         return buf;

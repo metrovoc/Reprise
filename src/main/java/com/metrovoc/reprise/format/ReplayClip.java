@@ -32,6 +32,8 @@ public final class ReplayClip {
             clip.openingTick = Math.clamp(original.openingTick - start, 0, clip.durationTicks);
             clip.markers.removeIf(m -> m.tick < start || m.tick > end);
             clip.markers.forEach(m -> m.tick -= start);
+            clip.worldSwitchTicks.removeIf(t -> t <= start || t > end);
+            clip.worldSwitchTicks.replaceAll(t -> t - start);
             clip.segments.clear();
             return ReplayOutput.write(source.toAbsolutePath().getParent(), clip, zip -> {
                 replay.copyPacks(zip, new HashSet<>());
@@ -70,7 +72,8 @@ public final class ReplayClip {
         var out = new DataOutputStream(new BufferedOutputStream(zip));
         out.writeInt(Actions.MAGIC);
         ByteBuffer data = replay.segment(index);
-        out.writeInt(start > original.startTick ? Actions.SNAPSHOT_TICK_VERSION : data.getInt(Integer.BYTES));
+        int version = data.getInt(Integer.BYTES);
+        out.writeInt(start > original.startTick ? Math.max(version, Actions.SNAPSHOT_TICK_VERSION) : version);
         int tick = original.startTick;
         // Before the in-point, fold packet history into the snapshot in its original order. This also
         // preserves state from mod payloads whose effects Reprise cannot reconstruct independently.

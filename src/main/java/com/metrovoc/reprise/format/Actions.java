@@ -11,6 +11,9 @@ public final class Actions {
     /** Version 2 segments may retain tick boundaries inside a clip's opening snapshot. */
     public static final int SNAPSHOT_TICK_VERSION = 2;
 
+    /** Version 3 allows another configuration handshake in the timed or folded packet stream. */
+    public static final int RECONFIGURATION_VERSION = 3;
+
     /** Ends one recorded client tick. No payload. */
     public static final int TICK = 0;
     /** A clientbound play packet: varint length, then the packet as the game codec writes it (id + body). */
