@@ -2,16 +2,12 @@ package com.metrovoc.reprise.format;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
-import com.metrovoc.reprise.record.ReplayPacker;
 import com.metrovoc.reprise.util.Varints;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -56,31 +52,16 @@ public final class ReplayJoiner {
                 }
             }
             if (!a.server.equals(b.server)) combined.server = "";
-            Path temp = Files.createTempFile(folder, ".join-", ".part");
-            try {
-                try (var zip = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
-                    Map<HashCode, Integer> chunks = new HashMap<>();
-                    var out = new DataOutputStream(new BufferedOutputStream(zip));
-                    int[] firstIds = copyChunks(first, zip, out, chunks);
-                    int[] secondIds = copyChunks(second, zip, out, chunks);
-                    out.flush();
-                    combined.chunkCount = chunks.size();
-                    copySegments(first, firstIds, combined, 0, zip);
-                    copySegments(second, secondIds, combined, a.durationTicks, zip);
-                    zip.putNextEntry(new ZipEntry("meta.json"));
-                    zip.write(combined.toJson().getBytes(StandardCharsets.UTF_8));
-                }
-                while (true) {
-                    Path result = ReplayPacker.uniqueName(folder, combined.name);
-                    try {
-                        return Files.move(temp, result);
-                    } catch (FileAlreadyExistsException ignored) {
-                        // Another join finished in the same second.
-                    }
-                }
-            } finally {
-                Files.deleteIfExists(temp);
-            }
+            return ReplayOutput.write(folder, combined, zip -> {
+                Map<HashCode, Integer> chunks = new HashMap<>();
+                var out = new DataOutputStream(new BufferedOutputStream(zip));
+                int[] firstIds = copyChunks(first, zip, out, chunks);
+                int[] secondIds = copyChunks(second, zip, out, chunks);
+                out.flush();
+                combined.chunkCount = chunks.size();
+                copySegments(first, firstIds, combined, 0, zip);
+                copySegments(second, secondIds, combined, a.durationTicks, zip);
+            });
         }
     }
 

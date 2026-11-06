@@ -1,6 +1,8 @@
 package com.metrovoc.reprise.editor;
 
+import com.metrovoc.reprise.Reprise;
 import com.metrovoc.reprise.RepriseKeys;
+import com.metrovoc.reprise.format.ReplayClip;
 import com.metrovoc.reprise.export.ExportScreen;
 import com.metrovoc.reprise.gui.Timecode;
 import com.metrovoc.reprise.gui.Timeline;
@@ -11,6 +13,8 @@ import com.metrovoc.reprise.playback.ReplaySession;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.AlertScreen;
+import net.minecraft.client.gui.screens.GenericMessageScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -39,6 +43,7 @@ public final class EditorScreen extends Screen {
     private Button namesButton;
     private Button fewerTurns;
     private Button moreTurns;
+    private Button saveClip;
 
     void addTargetKey(Keyframe.Target target) {
         this.session.setPlaying(false);
@@ -74,6 +79,8 @@ public final class EditorScreen extends Screen {
             .bounds(6, 30, 60, 20).build());
         this.moreTurns = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.more_turns"), b -> changeTurns(1))
             .bounds(68, 30, 60, 20).build());
+        this.saveClip = addRenderableWidget(Button.builder(Component.translatable("reprise.editor.save_clip"), b -> saveClip())
+            .bounds(132, 30, 82, 20).tooltip(Tooltip.create(Component.translatable("reprise.editor.save_clip.tooltip"))).build());
         int top = this.height - PANEL_HEIGHT;
         int y = top + 4;
         // Preferred widths; shrunk together when the screen is narrow.
@@ -136,7 +143,33 @@ public final class EditorScreen extends Screen {
         updateLabels();
     }
 
+    private void saveClip() {
+        int start = project().start();
+        int end = project().end(this.session.duration());
+        this.session.setPlaying(false);
+        var source = this.session.file().path();
+        var client = this.minecraft;
+        var progress = new GenericMessageScreen(Component.translatable("reprise.editor.saving_clip"));
+        client.setScreen(progress);
+        Thread.startVirtualThread(() -> {
+            Component message;
+            try {
+                var saved = ReplayClip.save(source, start, end);
+                message = Component.translatable("reprise.recording.saved", saved.getFileName().toString());
+            } catch (Exception e) {
+                Reprise.LOGGER.warn("Could not save replay clip", e);
+                message = Component.literal(String.valueOf(e.getMessage()));
+            }
+            Component result = message;
+            client.execute(() -> {
+                if (client.screen == progress) client.setScreen(new AlertScreen(
+                    () -> client.setScreen(this), Component.translatable("reprise.editor.save_clip"), result));
+            });
+        });
+    }
+
     private void updateLabels() {
+        this.saveClip.active = project().start() < project().end(this.session.duration());
         this.playButton.setMessage(Component.literal(this.session.isPlaying() ? "❚❚" : "▶"));
         this.speedButton.setMessage(Component.literal(PlaybackControls.formatSpeed(this.session.speed())));
         this.pathButton.setMessage(Component.translatable(CameraPath.preview() ? "reprise.editor.path.on" : "reprise.editor.path.off"));

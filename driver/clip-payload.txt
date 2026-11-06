@@ -1,0 +1,29 @@
+# Run after record-payload.txt with its 80-tick segment setting.
+replay latest
+wait 60
+replay editor
+replay seek 50
+press [
+replay seek 150
+press ]
+press Save replay clip
+wait 50
+press Back
+replay exit
+wait 40
+replay latest
+wait 60
+payload gold 0 -59 4
+payload gold 1 -59 4
+payload lit 2 -59 4
+replay seek 35
+payload gold 4 -59 4
+replay seek 100
+payload gold 3 -59 4
+replay seek 55
+payload air 3 -59 4
+payload gold 4 -59 4
+replay seek 0
+payload gold 0 -59 4
+payload lit 2 -59 4
+quit

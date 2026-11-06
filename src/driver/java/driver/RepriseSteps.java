@@ -121,6 +121,13 @@ public final class RepriseSteps {
                     LOG.info("[driver] sought to tick {} in {} ms, allocated {} bytes on client thread", target,
                         (System.nanoTime() - start) / 1_000_000, memory.getCurrentThreadAllocatedBytes() - before);
                 }
+                case "recorder_pos" -> {
+                    var recorder = mc.level.getEntity(s.recorderId());
+                    var expected = new net.minecraft.world.phys.Vec3(Double.parseDouble(a[1]), Double.parseDouble(a[2]), Double.parseDouble(a[3]));
+                    if (recorder == null || recorder.position().distanceToSqr(expected) > 1.0e-6) {
+                        throw new IllegalStateException("Expected recorder at " + expected + ", found " + recorder);
+                    }
+                }
                 case "block" -> {
                     var pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
                     var block = mc.level.getBlockState(pos).getBlock();

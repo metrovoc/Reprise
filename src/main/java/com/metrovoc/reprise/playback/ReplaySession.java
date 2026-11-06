@@ -48,6 +48,9 @@ import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
+import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
+import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.server.RunningOnDifferentThreadException;
 import net.minecraft.server.ServerLinks;
 import net.minecraft.world.entity.Entity;
@@ -148,6 +151,7 @@ public final class ReplaySession {
             mc.setScreen(new GenericMessageScreen(Component.translatable("reprise.replay.loading")));
             active.playSnapshot(0);
             active.applyResetsAtCurrentTick();
+            active.settleEntities();
         } catch (Exception e) {
             Reprise.LOGGER.error("Could not open replay {}", path, e);
             if (active != null) {
@@ -302,7 +306,9 @@ public final class ReplaySession {
             && (targetSegment == this.segment || target - this.tick < 20 * 60);
         this.seeking = true;
         try {
-            if (!forwardInPlace) {
+            if (forwardInPlace) {
+                settleEntities();
+            } else {
                 playSnapshot(targetSegment);
             }
             this.fastForwarding = true;
@@ -610,6 +616,17 @@ public final class ReplaySession {
             xRot = this.mc.player.getXRot();
         }
         deliver(packet, listener);
+        if (this.fastForwarding && this.mc.level != null) {
+            // No world ticks occur between these packets. Finish this move before the next packet
+            // chooses between interpolating and teleporting based on the current entity position.
+            Entity moved = switch (packet) {
+                case ClientboundEntityPositionSyncPacket sync -> this.mc.level.getEntity(sync.id());
+                case ClientboundMoveEntityPacket move -> move.getEntity(this.mc.level);
+                case ClientboundTeleportEntityPacket teleport -> this.mc.level.getEntity(teleport.id());
+                default -> null;
+            };
+            if (moved != null) settleEntity(moved);
+        }
         if (packet instanceof ClientboundLoginPacket) {
             addCameraInfo(listener);
         } else if (cameraPos != null && this.mc.player != null) {
@@ -652,15 +669,19 @@ public final class ReplaySession {
             return;
         }
         for (Entity entity : this.mc.level.entitiesForRendering()) {
-            InterpolationHandler interpolation = entity.getInterpolation();
-            if (interpolation != null && interpolation.hasActiveInterpolation()) {
-                entity.setPos(interpolation.position());
-                entity.setYRot(interpolation.yRot());
-                entity.setXRot(interpolation.xRot());
-                interpolation.cancel();
-            }
-            entity.setOldPosAndRot();
+            settleEntity(entity);
         }
+    }
+
+    private static void settleEntity(Entity entity) {
+        InterpolationHandler interpolation = entity.getInterpolation();
+        if (interpolation != null && interpolation.hasActiveInterpolation()) {
+            entity.setPos(interpolation.position());
+            entity.setYRot(interpolation.yRot());
+            entity.setXRot(interpolation.xRot());
+            interpolation.cancel();
+        }
+        entity.setOldPosAndRot();
     }
 
     private void placeCameraAtRecorder() {
